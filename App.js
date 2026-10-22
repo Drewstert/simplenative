@@ -8,11 +8,11 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-function HomeScreen({ navigation }) {
+function IceCreamScreen({ navigation }) {
   return (
     <View style={styles.screen}>
-      <Text style={styles.title}>Home</Text>
-      <Text style={styles.body}>This is the Home tab.</Text>
+      <Text style={styles.title}>Ice Cream</Text>
+      <Text style={styles.body}>This is the Ice Cream tab.</Text>
       <Button
         title="Go to Details"
         onPress={() => navigation.navigate('Details')}
@@ -26,7 +26,7 @@ function DetailsScreen({ navigation }) {
   return (
     <View style={styles.screen}>
       <Text style={styles.title}>Details</Text>
-      <Text style={styles.body}>This screen is pushed onto the Home stack.</Text>
+      <Text style={styles.body}>This screen is pushed onto the Ice Cream stack.</Text>
       <Button
         title="Go to More Details"
         onPress={() => navigation.navigate('MoreDetails')}
@@ -39,16 +39,16 @@ function MoreDetailsScreen() {
   return (
     <View style={styles.screen}>
       <Text style={styles.title}>More Details</Text>
-      <Text style={styles.body}>This screen is pushed onto the Home stack.</Text>
+      <Text style={styles.body}>This screen is pushed onto the Ice Cream stack.</Text>
     </View>
   );
 }
 
-function SettingsScreen({ navigation }) {
+function CoffeeScreen({ navigation }) {
   return (
     <View style={styles.screen}>
-      <Text style={styles.title}>Settings</Text>
-      <Text style={styles.body}>This is the Settings tab.</Text>
+      <Text style={styles.title}>Hot Coffee</Text>
+      <Text style={styles.body}>This is the Hot Coffee tab.</Text>
       <Button
         title="Go to About"
         onPress={() => navigation.navigate('About')}
@@ -61,25 +61,25 @@ function AboutScreen() {
   return (
     <View style={styles.screen}>
       <Text style={styles.title}>About</Text>
-      <Text style={styles.body}>This screen is pushed onto the Settings stack.</Text>
+      <Text style={styles.body}>This screen is pushed onto the Coffee stack.</Text>
     </View>
   );
 }
 
-function HomeStack() {
+function IceCreamStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Home" component={HomeScreen} />
+      <Stack.Screen name="Ice Cream" component={IceCreamScreen} />
       <Stack.Screen name="Details" component={DetailsScreen} />
       <Stack.Screen name="MoreDetails" component={MoreDetailsScreen} />
     </Stack.Navigator>
   );
 }
 
-function SettingsStack() {
+function CoffeeStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="Hot Coffee" component={CoffeeScreen} />
       <Stack.Screen name="About" component={AboutScreen} />
     </Stack.Navigator>
   );
@@ -90,8 +90,8 @@ export default function App() {
     <>
       <NavigationContainer>
         <Tab.Navigator screenOptions={{ headerShown: false }}>
-          <Tab.Screen name="HomeTab" component={HomeStack} />
-          <Tab.Screen name="SettingsTab" component={SettingsStack} />
+          <Tab.Screen name="Ice Cream" component={IceCreamStack} />
+          <Tab.Screen name="Hot Coffee" component={CoffeeStack} />
         </Tab.Navigator>
       </NavigationContainer>
       <StatusBar style="auto" />
