@@ -63,10 +63,10 @@ const backgrounds = {
 };
 
 const levels = [
-  { name: 'Kronos', rebirths: '2 Rebirths', bonus: 'x3 Passive', image: require('./assets/kronos.jpg') },
-  { name: 'City Escape', rebirths: '4 Rebirths', bonus: 'x2 Active', image: require('./assets/windmill-isle.jpg') },
-  { name: 'Chemical Plant', rebirths: '6 Rebirths', bonus: 'x3 Red Drop', image: require('./assets/chemical-plant.png') },
-  { name: 'Apotos', rebirths: '8 Rebirths', bonus: 'x2 Red Rate', image: require('./assets/apotos.jpg') },
+  { name: 'Kronos', requiredRebirths: 2, bonus: 'x3 Passive', passive: 3, image: require('./assets/kronos.jpg') },
+  { name: 'City Escape', requiredRebirths: 4, bonus: 'x2 Active', active: 2, image: require('./assets/windmill-isle.jpg') },
+  { name: 'Chemical Plant', requiredRebirths: 6, bonus: 'x3 Red Drop', red: 3, image: require('./assets/chemical-plant.png') },
+  { name: 'Apotos', requiredRebirths: 8, bonus: 'x2 Red Rate', redRate: 2, image: require('./assets/apotos.jpg') },
 ];
 
 const passiveCharacters = [
@@ -110,13 +110,15 @@ function StatLine({ label, value, valueStyle = styles.statValue }) {
   );
 }
 
-function Button({ children, onPress, wide = false }) {
+function Button({ children, onPress, wide = false, disabled = false }) {
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       style={({ pressed }) => [
         styles.button,
         wide && styles.wideButton,
+        disabled && styles.disabledButton,
         pressed && styles.pressed,
       ]}
     >
@@ -184,14 +186,16 @@ function ClickerScreen({
   timeStones,
   timePrice,
   passiveCharacters,
+  backgroundSource,
   capsuleVisible,
+  capsulePosition,
   onRing,
   onCapsule,
   onTimeStone,
   navigate,
 }) {
   return (
-    <ImageBackground source={backgrounds.clicker} style={styles.screen} imageStyle={styles.backgroundImage}>
+    <ImageBackground source={backgroundSource} style={styles.screen} imageStyle={styles.backgroundImage}>
       <TopBar rings={rings} redRings={redRings} title="Sonic Clicker" />
       <ScrollView contentContainerStyle={styles.clickerContent}>
         <View style={styles.clickStats}>
@@ -218,16 +222,22 @@ function ClickerScreen({
           </Pressable>
         </View>
 
-        {capsuleVisible && (
-          <Pressable
-            onPress={onCapsule}
-            style={({ pressed }) => [styles.capsule, pressed && styles.pressed]}
-            accessibilityRole="button"
-          >
-            <Image source={require('./assets/red-capsule.png')} style={styles.capsuleImage} />
-            <Text style={styles.capsuleText}>RED RING CAPSULE!</Text>
-          </Pressable>
-        )}
+        <View style={styles.capsuleSlot}>
+          {capsuleVisible && (
+            <Pressable
+              onPress={onCapsule}
+              style={({ pressed }) => [
+                styles.capsule,
+                capsulePosition,
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+            >
+              <Image source={require('./assets/red-capsule.png')} style={styles.capsuleImage} />
+              <Text style={styles.capsuleText}>RED RING CAPSULE!</Text>
+            </Pressable>
+          )}
+        </View>
 
         <View style={styles.mainButtons}>
           <Button onPress={onTimeStone}>{timeStones === 7 ? 'Rebirth' : `Time Stone: ${roundedValue(timePrice)}`}</Button>
@@ -241,17 +251,28 @@ function ClickerScreen({
   );
 }
 
-function LevelsScreen({ navigate }) {
+function LevelsScreen({ navigate, rebirths, selectedZone, onSelectZone }) {
   return (
     <View style={[styles.screen, styles.blueScreen]}>
       <Text style={styles.pageTitle}>Level Select</Text>
-      <Button wide onPress={() => navigate('home')}>Return To Default</Button>
+      <Text style={styles.levelProgress}>Rebirths: {rebirths}</Text>
+      <Text style={styles.levelProgress}>
+        Current Zone: {selectedZone || 'Green Hill'}
+      </Text>
+      <Button wide onPress={() => onSelectZone(null)}>Return To Green Hill</Button>
       <View style={styles.levelGrid}>
         {levels.map((level) => (
           <View key={level.name} style={styles.level}>
             <Image source={level.image} style={styles.levelImage} />
-            <Text style={styles.levelRequirement}>{level.rebirths}{'\n'}{level.bonus}</Text>
-            <Button onPress={() => navigate('home')}>{level.name}</Button>
+            <Text style={styles.levelRequirement}>
+              {level.requiredRebirths} Rebirths{'\n'}{level.bonus}
+            </Text>
+            <Button
+              disabled={rebirths < level.requiredRebirths}
+              onPress={() => onSelectZone(level.name)}
+            >
+              {rebirths < level.requiredRebirths ? 'Locked' : level.name}
+            </Button>
           </View>
         ))}
       </View>
@@ -452,6 +473,7 @@ export default function App() {
   const [upgrade, setUpgrade] = useState(0);
   const [upgradeMult, setUpgradeMult] = useState(1);
   const [baseMult, setBaseMult] = useState(1);
+  const [rebirths, setRebirths] = useState(0);
   const [ringsPerSec, setRingsPerSec] = useState(0);
   const [redDrop, setRedDrop] = useState(2);
   const [rngRed, setRngRed] = useState(20);
@@ -459,10 +481,11 @@ export default function App() {
   const [tickSpeed, setTickSpeed] = useState(1000);
   const [timeStones, setTimeStones] = useState(0);
   const [timePrice, setTimePrice] = useState(100);
-  const [backgroundMultipliers] = useState({ active: 1, passive: 1, red: 1, redRate: 1 });
+  const [selectedZone, setSelectedZone] = useState(null);
   const [superMult, setSuperMult] = useState(1);
   const [redRings, setRedRings] = useState(0);
   const [capsuleVisible, setCapsuleVisible] = useState(false);
+  const [capsulePosition, setCapsulePosition] = useState({ left: '20%', top: '10%' });
   const [redUpgrades, setRedUpgrades] = useState({
     speedShoes: { price: 2, level: 0 },
     starfall: { price: 10, level: 0 },
@@ -479,6 +502,14 @@ export default function App() {
   const [activeUpgradeCosts, setActiveUpgradeCosts] = useState(
     Object.fromEntries(activeUpgrades.map((upgrade) => [upgrade.name, upgrade.cost])),
   );
+  const activeLevel = levels.find((level) => level.name === selectedZone);
+  const backgroundMultipliers = {
+    active: activeLevel?.active || 1,
+    passive: activeLevel?.passive || 1,
+    red: activeLevel?.red || 1,
+    redRate: activeLevel?.redRate || 1,
+  };
+  const backgroundSource = activeLevel?.image || backgrounds.clicker;
   const ringsPerClick = roundedValue((1 + upgrade) * upgradeMult * baseMult * backgroundMultipliers.active * superMult);
   const effectiveRingsPerSec = roundedValue(ringsPerSec * upgradeMult * baseMult * backgroundMultipliers.passive * superMult);
 
@@ -511,6 +542,8 @@ export default function App() {
       setUpgrade(roundedGame.upgrade || 0);
       setUpgradeMult(roundedGame.upgradeMult || 1);
       setBaseMult(roundedGame.baseMult || 1);
+      setRebirths(Math.max(0, Math.round(Math.log2(roundedGame.baseMult || 1))));
+      setSelectedZone(game.selectedZone || null);
       setRingsPerSec(roundedGame.ringsPerSec || 0);
       setRedDrop(roundedGame.redDrop || 2);
       setRngRed(roundedGame.rngRed || 20);
@@ -545,6 +578,10 @@ export default function App() {
   useEffect(() => {
     const capsuleTick = setInterval(() => {
       if (rngRed >= Math.floor(Math.random() * 1000) || rngRed >= Math.floor(Math.random() * 100000)) {
+        setCapsulePosition({
+          left: `${5 + Math.floor(Math.random() * 65)}%`,
+          top: `${5 + Math.floor(Math.random() * 35)}%`,
+        });
         setCapsuleVisible(true);
         setTimeout(() => setCapsuleVisible(false), 3000);
       }
@@ -569,6 +606,8 @@ export default function App() {
     upgrade,
     upgradeMult,
     baseMult,
+    rebirths,
+    selectedZone,
     ringsPerSec,
     redDrop,
     rngRed,
@@ -667,6 +706,7 @@ export default function App() {
   const purchaseTimeStone = () => {
     if (timeStones >= 7) {
       setBaseMult((value) => value * 2);
+      setRebirths((value) => value + 1);
       setRings(0);
       setRedRings(0);
       setUpgrade(0);
@@ -725,7 +765,9 @@ export default function App() {
           timeStones={timeStones}
           timePrice={timePrice}
           passiveCharacters={ownedCharacters}
+          backgroundSource={backgroundSource}
           capsuleVisible={capsuleVisible}
+          capsulePosition={capsulePosition}
           onRing={collectRings}
           onCapsule={collectCapsule}
           onTimeStone={purchaseTimeStone}
@@ -734,7 +776,21 @@ export default function App() {
       );
     }
 
-    if (screen === 'levels') return <LevelsScreen navigate={navigate} />;
+    if (screen === 'levels') {
+      return (
+        <LevelsScreen
+          navigate={navigate}
+          rebirths={rebirths}
+          selectedZone={selectedZone}
+          onSelectZone={(zone) => {
+            const level = levels.find((candidate) => candidate.name === zone);
+            if (level && rebirths < level.requiredRebirths) return;
+            setSelectedZone(zone);
+            navigate('home');
+          }}
+        />
+      );
+    }
     if (screen === 'stats') {
       return (
         <StatsScreen
@@ -797,7 +853,7 @@ const styles = StyleSheet.create({
   currency: { alignItems: 'flex-end' },
   currencyText: { color: '#fff', fontSize: 12, fontWeight: '900' },
   redCurrency: { color: '#ff5964', fontSize: 10, fontWeight: '900' },
-  clickerContent: { width: '100%', alignItems: 'center', paddingBottom: 15 },
+  clickerContent: { width: '100%', flexGrow: 1, alignItems: 'center', paddingBottom: 15 },
   clickStats: { width: '100%', backgroundColor: 'rgba(13, 36, 116, .85)', padding: 7 },
   bigStat: { color: '#fff', fontSize: 24, fontWeight: '900' },
   bigStatValue: { color: '#ffe75c' },
@@ -819,6 +875,7 @@ const styles = StyleSheet.create({
   characterInitial: { color: '#fff', fontSize: 22, fontWeight: '900' },
   characterCount: { color: '#fff', backgroundColor: navy, borderRadius: 8, paddingHorizontal: 5, fontSize: 12, fontWeight: '900', marginTop: -7 },
   characterName: { color: navy, fontSize: 9, fontWeight: '900', textAlign: 'center', marginTop: 2 },
+  capsuleSlot: { width: '100%', height: 110, position: 'relative', overflow: 'hidden' },
   collectibleGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', backgroundColor: 'rgba(205, 215, 227, .68)' },
   collectible: { width: '50%', height: 110, borderWidth: 1, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   collectibleImage: { width: 70, height: 70, resizeMode: 'contain' },
@@ -827,16 +884,18 @@ const styles = StyleSheet.create({
   placeholderSun: { position: 'absolute', width: 22, height: 22, borderRadius: 11, backgroundColor: '#e8b848', top: 16, right: 20 },
   placeholderHill: { width: '130%', height: 45, backgroundColor: '#95a9b5', transform: [{ rotate: '-13deg' }], marginBottom: 25 },
   placeholderText: { position: 'absolute', bottom: 8, color: '#687989', fontSize: 11, fontWeight: '900', backgroundColor: 'rgba(255,255,255,.75)', paddingHorizontal: 5 },
-  capsule: { backgroundColor: '#20283e', borderWidth: 3, borderColor: '#ef3340', borderRadius: 14, padding: 8, alignItems: 'center', marginVertical: 8 },
-  capsuleImage: { width: 84, height: 72, resizeMode: 'contain' },
-  capsuleText: { color: '#fff', fontWeight: '900', fontSize: 12 },
-  mainButtons: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
+  capsule: { position: 'absolute', backgroundColor: '#20283e', borderWidth: 2, borderColor: '#ef3340', borderRadius: 10, padding: 4, alignItems: 'center' },
+  capsuleImage: { width: 52, height: 44, resizeMode: 'contain' },
+  capsuleText: { color: '#fff', fontWeight: '900', fontSize: 9 },
+  mainButtons: { width: '100%', marginTop: 'auto', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
   button: { backgroundColor: orange, borderColor: '#9b6500', borderWidth: 1, borderRadius: 5, minWidth: 112, paddingHorizontal: 10, paddingVertical: 10, alignItems: 'center', margin: 4 },
   wideButton: { minWidth: 132 },
+  disabledButton: { backgroundColor: '#7d8791', borderColor: '#5d6670' },
   buttonText: { color: '#fff', fontSize: 17, fontWeight: '900', textAlign: 'center' },
   pressed: { opacity: 0.65 },
   pageTitle: { color: '#4a5360', fontSize: 31, fontWeight: '900', textAlign: 'center', marginVertical: 8 },
   levelGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', flex: 1 },
+  levelProgress: { color: '#4b5663', fontSize: 16, fontWeight: '900', textAlign: 'center', marginBottom: 3 },
   level: { width: '46%', alignItems: 'center', marginVertical: 5 },
   levelImage: { width: 86, height: 125, resizeMode: 'cover' },
   levelRequirement: { color: '#4b5663', fontSize: 15, fontWeight: '900', textAlign: 'center', marginVertical: 3 },
