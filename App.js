@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
@@ -408,6 +408,9 @@ export default function App() {
   const [leaderboardRows, setLeaderboardRows] = useState([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState('');
+  const userRef = useRef(null);
+  const gameSnapshotRef = useRef(null);
+  const saveInProgressRef = useRef(false);
   const [rings, setRings] = useState(0);
   const [upgrade, setUpgrade] = useState(0);
   const [upgradeMult, setUpgradeMult] = useState(1);
@@ -458,6 +461,7 @@ export default function App() {
 
       if (!active || !currentUser) return;
       setUser(currentUser);
+      userRef.current = currentUser;
 
       const savedGame = await loadGame(currentUser.id);
       if (!active || !savedGame?.game_state) return;
@@ -487,7 +491,11 @@ export default function App() {
     });
 
     const { data: authSubscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (active) setUser(session?.user || null);
+      if (active) {
+        const currentUser = session?.user || null;
+        userRef.current = currentUser;
+        setUser(currentUser);
+      }
     });
 
     return () => {
@@ -536,6 +544,7 @@ export default function App() {
     activeUpgradeCosts,
     rebirths: baseMult - 1,
   };
+  gameSnapshotRef.current = gameSnapshot;
 
   const handleSave = async () => {
     if (!user) {
@@ -551,6 +560,25 @@ export default function App() {
       setSaveStatus(error.message);
     }
   };
+
+  useEffect(() => {
+    const autosaveTimer = setInterval(async () => {
+      if (!userRef.current || !gameSnapshotRef.current || saveInProgressRef.current) return;
+
+      saveInProgressRef.current = true;
+      setSaveStatus('Autosaving...');
+      try {
+        await saveGame(userRef.current.id, gameSnapshotRef.current);
+        setSaveStatus('Autosaved successfully.');
+      } catch (error) {
+        setSaveStatus(`Autosave failed: ${error.message}`);
+      } finally {
+        saveInProgressRef.current = false;
+      }
+    }, 60 * 1000);
+
+    return () => clearInterval(autosaveTimer);
+  }, []);
 
   const showLeaderboard = async () => {
     setScreen('leaderboard');
