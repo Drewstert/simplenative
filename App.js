@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
+  ActivityIndicator,
   Image,
   ImageBackground,
   Pressable,
@@ -8,8 +9,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import { supabase } from './lib/supabase';
+import { loadGame, loadLeaderboard, saveGame } from './lib/gameData';
 
 const orange = '#ffa500';
 const navy = '#071d5a';
@@ -320,7 +324,20 @@ function MarketScreen({ navigate, page, rings, redRings, passiveCharacters: owne
   );
 }
 
-function StatsScreen({ ringsPerClick, ringsPerSec, redPerEvent, upgradeMult, superMult, tickSpeed, navigate }) {
+function StatsScreen({
+  ringsPerClick,
+  ringsPerSec,
+  redPerEvent,
+  upgradeMult,
+  superMult,
+  tickSpeed,
+  username,
+  setUsername,
+  onSave,
+  saveStatus,
+  onLeaderboard,
+  navigate,
+}) {
   const statValues = [
     roundedValue(ringsPerClick),
     roundedValue(ringsPerSec),
@@ -342,22 +359,42 @@ function StatsScreen({ ringsPerClick, ringsPerSec, redPerEvent, upgradeMult, sup
         </View>
       ))}
       <View style={styles.saveRow}>
-        <Text style={styles.username}>Username</Text>
-        <Button>Save</Button>
+        <TextInput
+          value={username}
+          onChangeText={setUsername}
+          placeholder="Username"
+          placeholderTextColor="#78818d"
+          style={styles.username}
+          maxLength={24}
+        />
+        <Button onPress={onSave}>Save</Button>
       </View>
+      {saveStatus ? <Text style={styles.saveStatus}>{saveStatus}</Text> : null}
       <View style={styles.bottomButtons}>
         <Button onPress={() => navigate('home')}>Back</Button>
-        <Button onPress={() => navigate('leaderboard')}>Leaderboard</Button>
+        <Button onPress={onLeaderboard}>Leaderboard</Button>
       </View>
     </ImageBackground>
   );
 }
 
-function Leaderboard({ navigate }) {
+function Leaderboard({ rows, loading, error, navigate }) {
   return (
     <ImageBackground source={require('./assets/leaderboard-bg.png')} style={styles.screen}>
       <Text style={styles.pageTitle}>LEADERBOARD</Text>
-      <View style={styles.table}><Text style={styles.tableHeader}>Username              Rebirths              Rings</Text><Placeholder label="No scores yet" /></View>
+      <View style={styles.table}>
+        <Text style={styles.tableHeader}>Username                 Rebirths        Rings</Text>
+        {loading ? <ActivityIndicator size="large" color="#071d5a" /> : null}
+        {error ? <Text style={styles.saveStatus}>{error}</Text> : null}
+        {!loading && !error && rows.length === 0 ? <Placeholder label="No scores yet" /> : null}
+        {rows.map((row, index) => (
+          <View style={styles.leaderboardRow} key={`${row.username}-${index}`}>
+            <Text style={styles.leaderboardCell}>{row.username}</Text>
+            <Text style={styles.leaderboardCell}>{row.rebirths}</Text>
+            <Text style={styles.leaderboardCell}>{roundedValue(row.rings)}</Text>
+          </View>
+        ))}
+      </View>
       <Button wide onPress={() => navigate('home')}>Back</Button>
     </ImageBackground>
   );
@@ -365,6 +402,12 @@ function Leaderboard({ navigate }) {
 
 export default function App() {
   const [screen, setScreen] = useState('home');
+  const [user, setUser] = useState(null);
+  const [username, setUsername] = useState('Anonymous');
+  const [saveStatus, setSaveStatus] = useState('');
+  const [leaderboardRows, setLeaderboardRows] = useState([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardError, setLeaderboardError] = useState('');
   const [rings, setRings] = useState(0);
   const [upgrade, setUpgrade] = useState(0);
   const [upgradeMult, setUpgradeMult] = useState(1);
@@ -400,6 +443,60 @@ export default function App() {
   const effectiveRingsPerSec = ringsPerSec * upgradeMult * baseMult * backgroundMultipliers.passive * superMult;
 
   useEffect(() => {
+    let active = true;
+
+    async function initializeAuth() {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+
+      let currentUser = sessionData.session?.user;
+      if (!currentUser) {
+        const { data, error } = await supabase.auth.signInAnonymously();
+        if (error) throw error;
+        currentUser = data.user;
+      }
+
+      if (!active || !currentUser) return;
+      setUser(currentUser);
+
+      const savedGame = await loadGame(currentUser.id);
+      if (!active || !savedGame?.game_state) return;
+
+      const game = savedGame.game_state;
+      setUsername(game.username || savedGame.username || 'Anonymous');
+      setRings(game.rings || 0);
+      setRedRings(game.redRings || 0);
+      setUpgrade(game.upgrade || 0);
+      setUpgradeMult(game.upgradeMult || 1);
+      setBaseMult(game.baseMult || 1);
+      setRingsPerSec(game.ringsPerSec || 0);
+      setRedDrop(game.redDrop || 2);
+      setRngRed(game.rngRed || 20);
+      setClickRedRate(game.clickRedRate || 0);
+      setTickSpeed(game.tickSpeed || 1000);
+      setTimeStones(game.timeStones || 0);
+      setTimePrice(game.timePrice || 100);
+      setSuperMult(game.superMult || 1);
+      setRedUpgrades(game.redUpgrades || redUpgrades);
+      setOwnedCharacters(game.ownedCharacters || ownedCharacters);
+      setActiveUpgradeCosts(game.activeUpgradeCosts || activeUpgradeCosts);
+    }
+
+    initializeAuth().catch((error) => {
+      if (active) setSaveStatus(`Connection failed: ${error.message}`);
+    });
+
+    const { data: authSubscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) setUser(session?.user || null);
+    });
+
+    return () => {
+      active = false;
+      authSubscription.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
     const capsuleTick = setInterval(() => {
       if (rngRed >= Math.floor(Math.random() * 1000) || rngRed >= Math.floor(Math.random() * 100000)) {
         setCapsuleVisible(true);
@@ -418,6 +515,55 @@ export default function App() {
   }, [effectiveRingsPerSec, tickSpeed]);
 
   const navigate = (next) => setScreen(next);
+
+  const gameSnapshot = {
+    username,
+    rings,
+    redRings,
+    upgrade,
+    upgradeMult,
+    baseMult,
+    ringsPerSec,
+    redDrop,
+    rngRed,
+    clickRedRate,
+    tickSpeed,
+    timeStones,
+    timePrice,
+    superMult,
+    redUpgrades,
+    ownedCharacters,
+    activeUpgradeCosts,
+    rebirths: baseMult - 1,
+  };
+
+  const handleSave = async () => {
+    if (!user) {
+      setSaveStatus('Connecting to Supabase...');
+      return;
+    }
+
+    setSaveStatus('Saving...');
+    try {
+      await saveGame(user.id, gameSnapshot);
+      setSaveStatus('Saved successfully.');
+    } catch (error) {
+      setSaveStatus(error.message);
+    }
+  };
+
+  const showLeaderboard = async () => {
+    setScreen('leaderboard');
+    setLeaderboardLoading(true);
+    setLeaderboardError('');
+    try {
+      setLeaderboardRows(await loadLeaderboard());
+    } catch (error) {
+      setLeaderboardError(error.message);
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  };
 
   const collectRedRings = () => {
     if (clickRedRate * backgroundMultipliers.redRate < Math.floor(Math.random() * 1000)) return;
@@ -532,11 +678,25 @@ export default function App() {
           upgradeMult={upgradeMult}
           superMult={superMult}
           tickSpeed={tickSpeed}
+          username={username}
+          setUsername={setUsername}
+          onSave={handleSave}
+          saveStatus={saveStatus}
+          onLeaderboard={showLeaderboard}
           navigate={navigate}
         />
       );
     }
-    if (screen === 'leaderboard') return <Leaderboard navigate={navigate} />;
+    if (screen === 'leaderboard') {
+      return (
+        <Leaderboard
+          rows={leaderboardRows}
+          loading={leaderboardLoading}
+          error={leaderboardError}
+          navigate={navigate}
+        />
+      );
+    }
 
     return (
       <MarketScreen
@@ -646,8 +806,11 @@ const styles = StyleSheet.create({
   statLabel: { flex: 1, backgroundColor: orange, borderRadius: 15, borderWidth: 1, padding: 5, color: '#33445b', fontSize: 17, fontWeight: '900', textAlign: 'center' },
   statBox: { flex: 0.7, backgroundColor: '#000', borderRadius: 15, color: '#fff', fontSize: 16, fontWeight: '900', textAlign: 'center', padding: 6, marginLeft: 12 },
   saveRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginTop: 24 },
-  username: { backgroundColor: '#fff', borderWidth: 1, borderRadius: 4, padding: 12, color: '#78818d', width: '68%' },
+  username: { backgroundColor: '#fff', borderWidth: 1, borderRadius: 4, padding: 12, color: '#33445b', width: '68%' },
+  saveStatus: { color: '#fff', fontSize: 14, fontWeight: '900', textAlign: 'center', marginTop: 8 },
   bottomButtons: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 25 },
   table: { flex: 1, width: '100%', borderWidth: 1, borderColor: '#fff', backgroundColor: 'rgba(210, 221, 235, .62)' },
   tableHeader: { color: '#4a5360', fontSize: 16, fontWeight: '900', padding: 8, textAlign: 'center' },
+  leaderboardRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderColor: '#fff', padding: 8 },
+  leaderboardCell: { color: '#33445b', flex: 1, fontSize: 15, fontWeight: '900', textAlign: 'center' },
 });
