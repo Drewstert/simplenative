@@ -18,7 +18,44 @@ import { loadGame, loadLeaderboard, saveGame } from './lib/gameData';
 const orange = '#ffa500';
 const navy = '#071d5a';
 const roundedValue = (value) => Math.round(value);
+const roundIfNumber = (value) => (typeof value === 'number' ? roundedValue(value) : value);
 const formatTickSpeed = (milliseconds) => `${(milliseconds / 1000).toFixed(1)}s`;
+const roundGameState = (game) => ({
+  ...game,
+  rings: roundedValue(game.rings),
+  redRings: roundedValue(game.redRings),
+  upgrade: roundedValue(game.upgrade),
+  upgradeMult: roundedValue(game.upgradeMult),
+  baseMult: roundedValue(game.baseMult),
+  ringsPerSec: roundedValue(game.ringsPerSec),
+  redDrop: roundedValue(game.redDrop),
+  rngRed: roundedValue(game.rngRed),
+  clickRedRate: roundedValue(game.clickRedRate),
+  timeStones: roundedValue(game.timeStones),
+  timePrice: roundedValue(game.timePrice),
+  superMult: roundedValue(game.superMult),
+  redUpgrades: game.redUpgrades
+    ? Object.fromEntries(
+      Object.entries(game.redUpgrades).map(([key, upgrade]) => [
+        key,
+        { ...upgrade, price: roundedValue(upgrade.price), level: roundIfNumber(upgrade.level) },
+      ]),
+    )
+    : undefined,
+  ownedCharacters: game.ownedCharacters
+    ? game.ownedCharacters.map((character) => ({
+      ...character,
+      count: roundedValue(character.count),
+      cost: roundedValue(character.cost),
+      gain: roundedValue(character.gain),
+    }))
+    : undefined,
+  activeUpgradeCosts: game.activeUpgradeCosts
+    ? Object.fromEntries(
+      Object.entries(game.activeUpgradeCosts).map(([name, cost]) => [name, roundedValue(cost)]),
+    )
+    : undefined,
+});
 const backgrounds = {
   clicker: require('./assets/green-hill.jpg'),
   stats: require('./assets/stats-bg.png'),
@@ -193,7 +230,7 @@ function ClickerScreen({
         )}
 
         <View style={styles.mainButtons}>
-          <Button onPress={onTimeStone}>{timeStones === 7 ? 'Rebirth' : `Time Stone: ${timePrice}`}</Button>
+          <Button onPress={onTimeStone}>{timeStones === 7 ? 'Rebirth' : `Time Stone: ${roundedValue(timePrice)}`}</Button>
           <Button onPress={() => navigate('stats')}>Stats/Save</Button>
           <Button onPress={() => navigate('upgrades')}>Ring Shop</Button>
           <Button onPress={() => navigate('levels')}>Zone Select</Button>
@@ -442,8 +479,8 @@ export default function App() {
   const [activeUpgradeCosts, setActiveUpgradeCosts] = useState(
     Object.fromEntries(activeUpgrades.map((upgrade) => [upgrade.name, upgrade.cost])),
   );
-  const ringsPerClick = (1 + upgrade) * upgradeMult * baseMult * backgroundMultipliers.active * superMult;
-  const effectiveRingsPerSec = ringsPerSec * upgradeMult * baseMult * backgroundMultipliers.passive * superMult;
+  const ringsPerClick = roundedValue((1 + upgrade) * upgradeMult * baseMult * backgroundMultipliers.active * superMult);
+  const effectiveRingsPerSec = roundedValue(ringsPerSec * upgradeMult * baseMult * backgroundMultipliers.passive * superMult);
 
   useEffect(() => {
     let active = true;
@@ -468,22 +505,23 @@ export default function App() {
 
       const game = savedGame.game_state;
       setUsername(game.username || savedGame.username || 'Anonymous');
-      setRings(game.rings || 0);
-      setRedRings(game.redRings || 0);
-      setUpgrade(game.upgrade || 0);
-      setUpgradeMult(game.upgradeMult || 1);
-      setBaseMult(game.baseMult || 1);
-      setRingsPerSec(game.ringsPerSec || 0);
-      setRedDrop(game.redDrop || 2);
-      setRngRed(game.rngRed || 20);
-      setClickRedRate(game.clickRedRate || 0);
+      const roundedGame = roundGameState(game);
+      setRings(roundedGame.rings || 0);
+      setRedRings(roundedGame.redRings || 0);
+      setUpgrade(roundedGame.upgrade || 0);
+      setUpgradeMult(roundedGame.upgradeMult || 1);
+      setBaseMult(roundedGame.baseMult || 1);
+      setRingsPerSec(roundedGame.ringsPerSec || 0);
+      setRedDrop(roundedGame.redDrop || 2);
+      setRngRed(roundedGame.rngRed || 20);
+      setClickRedRate(roundedGame.clickRedRate || 0);
       setTickSpeed(game.tickSpeed || 1000);
-      setTimeStones(game.timeStones || 0);
-      setTimePrice(game.timePrice || 100);
-      setSuperMult(game.superMult || 1);
-      setRedUpgrades(game.redUpgrades || redUpgrades);
-      setOwnedCharacters(game.ownedCharacters || ownedCharacters);
-      setActiveUpgradeCosts(game.activeUpgradeCosts || activeUpgradeCosts);
+      setTimeStones(roundedGame.timeStones || 0);
+      setTimePrice(roundedGame.timePrice || 100);
+      setSuperMult(roundedGame.superMult || 1);
+      setRedUpgrades(roundedGame.redUpgrades || redUpgrades);
+      setOwnedCharacters(roundedGame.ownedCharacters || ownedCharacters);
+      setActiveUpgradeCosts(roundedGame.activeUpgradeCosts || activeUpgradeCosts);
     }
 
     initializeAuth().catch((error) => {
@@ -524,7 +562,7 @@ export default function App() {
 
   const navigate = (next) => setScreen(next);
 
-  const gameSnapshot = {
+  const gameSnapshot = roundGameState({
     username,
     rings,
     redRings,
@@ -543,7 +581,7 @@ export default function App() {
     ownedCharacters,
     activeUpgradeCosts,
     rebirths: baseMult - 1,
-  };
+  });
   gameSnapshotRef.current = gameSnapshot;
 
   const handleSave = async () => {
@@ -595,7 +633,7 @@ export default function App() {
 
   const collectRedRings = () => {
     if (clickRedRate * backgroundMultipliers.redRate < Math.floor(Math.random() * 1000)) return;
-    setRedRings((value) => value + (redDrop + baseMult / 2) * backgroundMultipliers.red);
+    setRedRings((value) => roundedValue(value + (redDrop + baseMult / 2) * backgroundMultipliers.red));
   };
 
   const collectRings = () => {
@@ -604,7 +642,7 @@ export default function App() {
   };
 
   const collectCapsule = () => {
-    setRedRings((value) => value + (redDrop + baseMult / 2) * backgroundMultipliers.red);
+    setRedRings((value) => roundedValue(value + (redDrop + baseMult / 2) * backgroundMultipliers.red));
     setCapsuleVisible(false);
   };
 
@@ -613,7 +651,7 @@ export default function App() {
     setRings((value) => value - character.cost);
     setRingsPerSec((value) => value + character.gain);
     setOwnedCharacters((current) => current.map((owned) => (
-      owned.name === character.name ? { ...owned, count: owned.count + 1, cost: owned.cost * 1.2 } : owned
+      owned.name === character.name ? { ...owned, count: owned.count + 1, cost: roundedValue(owned.cost * 1.2) } : owned
     )));
   };
   const purchaseActiveUpgrade = (upgrade) => {
@@ -623,7 +661,7 @@ export default function App() {
     setUpgrade((value) => value + upgrade.gain);
     setActiveUpgradeCosts((current) => ({
       ...current,
-      [upgrade.name]: current[upgrade.name] * 1.2,
+      [upgrade.name]: roundedValue(current[upgrade.name] * 1.2),
     }));
   };
   const purchaseTimeStone = () => {
@@ -638,7 +676,7 @@ export default function App() {
       setClickRedRate(0);
       setTickSpeed(1000);
       setTimeStones(0);
-      setTimePrice(100 * baseMult * 2);
+      setTimePrice(roundedValue(100 * baseMult * 2));
       setOwnedCharacters(passiveCharacters.map((character) => ({ ...character, count: 0 })));
       setActiveUpgradeCosts(Object.fromEntries(activeUpgrades.map((upgrade) => [upgrade.name, upgrade.cost])));
       return;
@@ -647,7 +685,7 @@ export default function App() {
     setRings((value) => Math.round(value - timePrice));
     setTickSpeed((value) => value - 100);
     setTimeStones((value) => value + 1);
-    setTimePrice((value) => value * 35);
+    setTimePrice((value) => roundedValue(value * 35));
   };
   const purchaseRedUpgrade = (item) => {
     const upgrade = redUpgrades[item.key];
@@ -658,13 +696,13 @@ export default function App() {
       ...current,
       [item.key]: {
         ...current[item.key],
-        price: current[item.key].price * priceMultiplier,
+        price: roundedValue(current[item.key].price * priceMultiplier),
         level: (current[item.key].level || 0) + 1,
         stock: typeof current[item.key].stock === 'number' ? current[item.key].stock - 1 : current[item.key].stock,
       },
     }));
-    setRedRings((value) => value - upgrade.price);
-    if (item.key === 'speedShoes') setRedDrop((value) => value * 1.2);
+    setRedRings((value) => roundedValue(value - upgrade.price));
+    if (item.key === 'speedShoes') setRedDrop((value) => roundedValue(value * 1.2));
     if (item.key === 'warpTopaz') setClickRedRate((value) => value + 1);
     if (item.key === 'robotTeleporter') setRngRed((value) => value + 5);
     if (item.key === 'starfall') setUpgradeMult((value) => value + 1);
