@@ -116,15 +116,6 @@ const createRedUpgrades = () => ({
   robotTeleporter: { price: 8, level: 0 },
 });
 
-const statLabels = [
-  'Rings/Click',
-  'Rings/Second',
-  'RedRings/Capsule',
-  'Multiplier',
-  'Rebirth Multiplier',
-  'Seconds/Tick',
-];
-
 const characterPositions = [
   styles => styles.characterTopLeft,
   styles => styles.characterTopRight,
@@ -236,7 +227,12 @@ function ClickerScreen({
   return (
     <ImageBackground source={backgroundSource} style={styles.screen} imageStyle={styles.backgroundImage}>
       <TopBar title="Sonic Clicker" />
-      <ScrollView contentContainerStyle={styles.clickerContent}>
+      <ScrollView
+        contentContainerStyle={styles.clickerContent}
+        bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
+      >
         <View style={styles.clickStats}>
           <Text style={styles.statsTitle}>GAME STATS</Text>
           <View style={styles.statsGrid}>
@@ -385,7 +381,7 @@ function LevelsScreen({ navigate, rebirths, selectedZone, onSelectZone }) {
   );
 }
 
-function UpgradeColumn({ title, upgrades, getDetail, getPrice, onPurchase }) {
+function UpgradeColumn({ title, upgrades, getDetail, getPrice, getLevel, onPurchase }) {
   return (
     <View style={styles.upgradeColumn}>
       <Text style={styles.shopColumnTitle}>{title}</Text>
@@ -396,6 +392,7 @@ function UpgradeColumn({ title, upgrades, getDetail, getPrice, onPurchase }) {
           </View>
           <Text style={styles.shopName}>{upgrade.name}</Text>
           <Text style={styles.shopDetail}>{getDetail(upgrade)}</Text>
+          <Text style={styles.shopLevel}>Level {getLevel(upgrade)}</Text>
           <Button onPress={() => onPurchase(upgrade)}>
             {formatDisplayNumber(getPrice(upgrade))}
           </Button>
@@ -405,7 +402,19 @@ function UpgradeColumn({ title, upgrades, getDetail, getPrice, onPurchase }) {
   );
 }
 
-function MarketScreen({ navigate, page, rings, redRings, passiveCharacters: ownedCharacters, onPurchase, onPurchaseActive, activeUpgradeCosts, redUpgrades, onPurchaseRedUpgrade }) {
+function MarketScreen({
+  navigate,
+  page,
+  rings,
+  redRings,
+  passiveCharacters: ownedCharacters,
+  activeUpgradeLevels,
+  onPurchase,
+  onPurchaseActive,
+  activeUpgradeCosts,
+  redUpgrades,
+  onPurchaseRedUpgrade,
+}) {
   const blackMarket = page === 'redShop';
   const [redShopPage, setRedShopPage] = useState('items');
 
@@ -454,11 +463,15 @@ function MarketScreen({ navigate, page, rings, redRings, passiveCharacters: owne
         style={styles.shopScroll}
         contentContainerStyle={styles.marketBody}
         showsVerticalScrollIndicator
+        bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
       >
         {blackMarket ? redShopItems.map((item) => (
           <View style={styles.shopItem} key={item.key}>
             <Text style={styles.shopName}>{item.name}</Text>
             <Text style={styles.shopDetail}>{item.detail}</Text>
+            {!item.stock && <Text style={styles.shopLevel}>Level {redUpgrades[item.key].level || 0}</Text>}
             {item.stock && <Text style={styles.shopStock}>{item.stock}</Text>}
             <Button
               onPress={() => onPurchaseRedUpgrade(item)}
@@ -478,6 +491,7 @@ function MarketScreen({ navigate, page, rings, redRings, passiveCharacters: owne
               upgrades={activeUpgrades}
               getDetail={(upgrade) => upgrade.detail}
               getPrice={(upgrade) => activeUpgradeCosts[upgrade.name]}
+              getLevel={(upgrade) => activeUpgradeLevels[upgrade.name] || 0}
               onPurchase={onPurchaseActive}
             />
             <UpgradeColumn
@@ -485,6 +499,7 @@ function MarketScreen({ navigate, page, rings, redRings, passiveCharacters: owne
               upgrades={ownedCharacters}
               getDetail={(character) => `+${formatDisplayNumber(character.gain)} RPS`}
               getPrice={(character) => character.cost}
+              getLevel={(character) => character.count}
               onPurchase={onPurchase}
             />
           </View>
@@ -500,12 +515,26 @@ function MarketScreen({ navigate, page, rings, redRings, passiveCharacters: owne
 }
 
 function StatsScreen({
+  rings,
+  redRings,
+  upgrade,
   ringsPerClick,
   ringsPerSec,
   redPerEvent,
+  redDrop,
+  redChance,
+  capsuleChance,
   upgradeMult,
+  baseMult,
   superMult,
   tickSpeed,
+  timeStones,
+  timePrice,
+  rebirths,
+  selectedZone,
+  chaosEmeraldsOwned,
+  superEmeraldsOwned,
+  masterEmeraldOwned,
   username,
   setUsername,
   onSave,
@@ -513,42 +542,96 @@ function StatsScreen({
   onLeaderboard,
   navigate,
 }) {
-  const statValues = [
-    formatDisplayNumber(ringsPerClick),
-    formatDisplayNumber(ringsPerSec),
-    formatDisplayNumber(redPerEvent),
-    formatDisplayNumber(upgradeMult),
-    formatDisplayNumber(superMult),
-    formatTickSpeed(tickSpeed),
+  const statGroups = [
+    {
+      title: 'PROGRESS',
+      accent: styles.statsAccentGold,
+      stats: [
+        ['Rings', formatDisplayNumber(rings)],
+        ['Red Rings', formatDisplayNumber(redRings)],
+        ['Rebirths', formatDisplayNumber(rebirths)],
+        ['Current Zone', selectedZone || 'Green Hill'],
+        ['Time Stones', `${timeStones}/7`],
+        ['Next Time Stone', timeStones === 7 ? 'Ready' : formatDisplayNumber(timePrice)],
+      ],
+    },
+    {
+      title: 'PRODUCTION',
+      accent: styles.statsAccentBlue,
+      stats: [
+        ['Rings / Click', formatDisplayNumber(ringsPerClick)],
+        ['Rings / Second', formatDisplayNumber(ringsPerSec)],
+        ['Active Ring Bonus', `+${formatDisplayNumber(upgrade)}`],
+        ['Active Multiplier', `${formatDisplayNumber(upgradeMult)}x`],
+        ['Base Multiplier', `${formatDisplayNumber(baseMult)}x`],
+        ['Seconds / Tick', formatTickSpeed(tickSpeed)],
+      ],
+    },
+    {
+      title: 'RED RING SYSTEM',
+      accent: styles.statsAccentRed,
+      stats: [
+        ['Red Rings / Drop', formatDisplayNumber(redPerEvent)],
+        ['Red Rings / Click', `${(redChance / 10).toFixed(1)}%`],
+        ['Capsule Chance / Tick', `${(capsuleChance / 10).toFixed(1)}%`],
+        ['Red Drop Upgrade', formatDisplayNumber(redDrop)],
+        ['Chaos Emeralds', `${chaosEmeraldsOwned}/7`],
+        ['Super Emeralds', `${superEmeraldsOwned}/7`],
+        ['Master Emerald', masterEmeraldOwned ? 'Obtained' : 'Not obtained'],
+      ],
+    },
+    {
+      title: 'FORMS & UPGRADES',
+      accent: styles.statsAccentPurple,
+      stats: [
+        ['Current Form', superMult >= 3 ? 'Hyper' : superMult >= 2 ? 'Super' : 'Base'],
+        ['Form Multiplier', `${formatDisplayNumber(superMult)}x`],
+      ],
+    },
   ];
 
   return (
     <ImageBackground source={backgrounds.stats} style={[styles.screen, styles.statsScreen]}>
-      <Text style={styles.pageTitle}>Stats</Text>
-      {statLabels.map((label, index) => (
-        <View style={styles.statRow} key={label}>
-          <Text style={styles.statLabel}>{label}</Text>
-          <Text style={styles.statBox}>
-            {statValues[index]}
-          </Text>
+      <TopBar title="Stats & Save" onBack={() => navigate('home')} />
+      <ScrollView
+        style={styles.statsScroll}
+        contentContainerStyle={styles.statsContent}
+        bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
+      >
+        <Text style={styles.statsIntro}>Your complete game overview</Text>
+        {statGroups.map((group) => (
+          <View style={styles.statsGroup} key={group.title}>
+            <Text style={[styles.statsGroupTitle, group.accent]}>{group.title}</Text>
+            <View style={styles.statsCardGrid}>
+              {group.stats.map(([label, value]) => (
+                <View style={styles.statsTile} key={label}>
+                  <Text style={styles.statsTileLabel}>{label}</Text>
+                  <Text style={styles.statsTileValue} numberOfLines={1}>{value}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ))}
+        <View style={styles.savePanel}>
+          <Text style={styles.saveTitle}>SAVE GAME</Text>
+          <TextInput
+            value={username}
+            onChangeText={setUsername}
+            placeholder="Enter username"
+            placeholderTextColor="#9aa7c2"
+            style={styles.username}
+            maxLength={24}
+          />
+          <Button wide onPress={onSave}>Save Progress</Button>
+          {saveStatus ? <Text style={styles.saveStatus}>{saveStatus}</Text> : null}
         </View>
-      ))}
-      <View style={styles.saveRow}>
-        <TextInput
-          value={username}
-          onChangeText={setUsername}
-          placeholder="Username"
-          placeholderTextColor="#78818d"
-          style={styles.username}
-          maxLength={24}
-        />
-        <Button onPress={onSave}>Save</Button>
-      </View>
-      {saveStatus ? <Text style={styles.saveStatus}>{saveStatus}</Text> : null}
-      <View style={styles.bottomButtons}>
-        <Button onPress={() => navigate('home')}>Back</Button>
-        <Button onPress={onLeaderboard}>Leaderboard</Button>
-      </View>
+        <View style={styles.statsActions}>
+          <Button onPress={() => navigate('home')}>Back</Button>
+          <Button onPress={onLeaderboard}>Leaderboard</Button>
+        </View>
+      </ScrollView>
     </ImageBackground>
   );
 }
@@ -950,12 +1033,26 @@ export default function App() {
     if (screen === 'stats') {
       return (
         <StatsScreen
+          rings={rings}
+          redRings={redRings}
+          upgrade={upgrade}
           ringsPerClick={ringsPerClick}
           ringsPerSec={effectiveRingsPerSec}
           redPerEvent={(redDrop + baseMult / 2) * backgroundMultipliers.red}
+          redDrop={redDrop}
+          redChance={clickRedRate * backgroundMultipliers.redRate}
+          capsuleChance={rngRed}
           upgradeMult={upgradeMult}
+          baseMult={baseMult}
           superMult={superMult}
           tickSpeed={tickSpeed}
+          timeStones={timeStones}
+          timePrice={timePrice}
+          rebirths={rebirths}
+          selectedZone={selectedZone}
+          chaosEmeraldsOwned={7 - redUpgrades.chaosEmerald.stock}
+          superEmeraldsOwned={7 - redUpgrades.superEmerald.stock}
+          masterEmeraldOwned={redUpgrades.masterEmerald.stock === 0}
           username={username}
           setUsername={setUsername}
           onSave={handleSave}
@@ -983,6 +1080,7 @@ export default function App() {
         rings={rings}
         redRings={redRings}
         passiveCharacters={ownedCharacters}
+        activeUpgradeLevels={activeUpgradeLevels}
         activeUpgradeCosts={activeUpgradeCosts}
         redUpgrades={redUpgrades}
         onPurchase={purchaseCharacter}
@@ -1030,8 +1128,8 @@ const styles = StyleSheet.create({
   characterTop: { top: -20, left: '50%', transform: [{ translateX: -130 }, { translateY: 20 }] },
   characterIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
   characterInitial: { color: '#fff', fontSize: 22, fontWeight: '900' },
-  characterCount: { color: '#fff', backgroundColor: navy, borderRadius: 8, paddingHorizontal: 5, fontSize: 12, fontWeight: '900', marginTop: -7 },
-  characterName: { color: navy, fontSize: 9, fontWeight: '900', textAlign: 'center', marginTop: 2 },
+  characterCount: { color: '#fff', backgroundColor: 'navy', borderRadius: 8, paddingHorizontal: 5, fontSize: 12, fontWeight: '900', marginTop: -7 },
+  characterName: { color: '#000', fontSize: 10, fontWeight: '900', textAlign: 'center', marginTop: 2 },
   collectibleGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', backgroundColor: 'rgba(205, 215, 227, .68)' },
   collectible: { width: '50%', height: 110, borderWidth: 1, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   collectibleImage: { width: 70, height: 70, resizeMode: 'contain' },
@@ -1108,15 +1206,27 @@ const styles = StyleSheet.create({
   shopCharacterIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff', marginBottom: 3 },
   shopName: { color: '#fff', fontSize: 15, fontWeight: '900', textAlign: 'center' },
   shopDetail: { color: '#fff', fontSize: 14, fontWeight: '900', textAlign: 'center', minHeight: 34 },
+  shopLevel: { color: '#ffe75c', fontSize: 13, fontWeight: '900', textAlign: 'center', marginBottom: 2 },
   shopStock: { color: '#fff', fontSize: 14, fontWeight: '900', textAlign: 'center' },
-  statsScreen: { backgroundColor: 'rgba(194, 205, 211, .9)', alignItems: 'stretch' },
-  statRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 5 },
-  statLabel: { flex: 1, backgroundColor: orange, borderRadius: 15, borderWidth: 1, padding: 5, color: '#33445b', fontSize: 17, fontWeight: '900', textAlign: 'center' },
-  statBox: { flex: 0.7, backgroundColor: '#000', borderRadius: 15, color: '#fff', fontSize: 16, fontWeight: '900', textAlign: 'center', padding: 6, marginLeft: 12 },
-  saveRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginTop: 24 },
-  username: { backgroundColor: '#fff', borderWidth: 1, borderRadius: 4, padding: 12, color: '#33445b', width: '68%' },
-  saveStatus: { color: '#fff', fontSize: 14, fontWeight: '900', textAlign: 'center', marginTop: 8 },
-  bottomButtons: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 25 },
+  statsScreen: { backgroundColor: '#101b3d', alignItems: 'stretch' },
+  statsScroll: { width: '100%', flex: 1 },
+  statsContent: { alignItems: 'center', flexGrow: 1, padding: 8, paddingBottom: 24 },
+  statsIntro: { color: '#d9e3ff', fontSize: 14, fontWeight: '700', marginVertical: 8 },
+  statsGroup: { width: '100%', backgroundColor: 'rgba(5, 28, 91, .94)', borderRadius: 10, padding: 8, marginBottom: 10, borderWidth: 1, borderColor: '#385a9d' },
+  statsGroupTitle: { fontSize: 14, fontWeight: '900', letterSpacing: 1, marginBottom: 6 },
+  statsAccentGold: { color: '#ffe75c' },
+  statsAccentBlue: { color: '#7de2ff' },
+  statsAccentRed: { color: '#ff8b95' },
+  statsAccentPurple: { color: '#d7a8ff' },
+  statsCardGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  statsTile: { width: '48.5%', minHeight: 58, backgroundColor: 'rgba(255, 255, 255, .1)', borderRadius: 7, padding: 7, marginBottom: 6, justifyContent: 'center' },
+  statsTileLabel: { color: '#b9c9ed', fontSize: 10, fontWeight: '800' },
+  statsTileValue: { color: '#fff', fontSize: 17, fontWeight: '900', marginTop: 4 },
+  savePanel: { width: '100%', backgroundColor: 'rgba(20, 43, 104, .98)', borderWidth: 1, borderColor: '#ffe75c', borderRadius: 10, padding: 10, alignItems: 'center', marginTop: 2 },
+  saveTitle: { color: '#ffe75c', fontSize: 16, fontWeight: '900', marginBottom: 7 },
+  username: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#9aa7c2', borderRadius: 7, padding: 11, color: '#33445b', width: '100%', marginBottom: 4 },
+  saveStatus: { color: '#d9e3ff', fontSize: 13, fontWeight: '900', textAlign: 'center', marginTop: 4 },
+  statsActions: { width: '100%', flexDirection: 'row', justifyContent: 'space-around', marginTop: 6 },
   table: { flex: 1, width: '100%', borderWidth: 1, borderColor: '#fff', backgroundColor: 'rgba(210, 221, 235, .62)' },
   tableHeader: { color: '#4a5360', fontSize: 16, fontWeight: '900', padding: 8, textAlign: 'center' },
   leaderboardRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderColor: '#fff', padding: 8 },
