@@ -61,12 +61,26 @@ const roundGameState = (game) => ({
       Object.entries(game.activeUpgradeCosts).map(([name, cost]) => [name, roundedValue(cost)]),
     )
     : undefined,
+  activeUpgradeLevels: game.activeUpgradeLevels
+    ? Object.fromEntries(
+      Object.entries(game.activeUpgradeLevels).map(([name, level]) => [name, roundedValue(level)]),
+    )
+    : undefined,
 });
 const backgrounds = {
   clicker: require('./assets/green-hill.jpg'),
   stats: require('./assets/stats-bg.png'),
   market: require('./assets/black-market.png'),
 };
+const chaosEmeraldImages = [
+  require('./assets/Chaos_Emerald 1.png'),
+  require('./assets/Chaos_Emerald 2.png'),
+  require('./assets/Chaos_Emerald 3.png'),
+  require('./assets/Chaos_Emerald 4.png'),
+  require('./assets/Chaos_Emerald 5.png'),
+  require('./assets/Chaos_Emerald 6.png'),
+  require('./assets/Chaos_Emerald 7.png'),
+];
 
 const levels = [
   { name: 'Kronos', requiredRebirths: 2, bonus: 'x3 Passive', passive: 3, image: require('./assets/kronos.jpg') },
@@ -91,6 +105,17 @@ const activeUpgrades = [
   { name: 'Invincibility', detail: '+25000 RPC', gain: 25000, cost: 2500000000, color: '#b67be2' },
 ];
 
+const createRedUpgrades = () => ({
+  speedShoes: { price: 2, level: 0 },
+  starfall: { price: 10, level: 0 },
+  chipBracelet: { price: 50, stock: 1 },
+  chaosEmerald: { price: 100, stock: 7 },
+  masterEmerald: { price: 1000, stock: 1 },
+  superEmerald: { price: 1000, stock: 7 },
+  warpTopaz: { price: 8, level: 0 },
+  robotTeleporter: { price: 8, level: 0 },
+});
+
 const statLabels = [
   'Rings/Click',
   'Rings/Second',
@@ -105,7 +130,7 @@ const characterPositions = [
   styles => styles.characterTopRight,
   styles => styles.characterLeft,
   styles => styles.characterRight,
-  styles => styles.characterBottom,
+  styles => styles.characterTop,
 ];
 
 function StatLine({ label, value, valueStyle = styles.statValue }) {
@@ -193,6 +218,7 @@ function ClickerScreen({
   rebirths,
   superMult,
   currentZone,
+  chaosEmeraldsOwned,
   ringsPerClick,
   ringsPerSec,
   timeStones,
@@ -262,6 +288,15 @@ function ClickerScreen({
           >
             <Image source={require('./assets/goal-ring.png')} style={styles.goalImage} />
           </Pressable>
+          <View style={styles.emeraldRow}>
+            {chaosEmeraldImages.slice(0, chaosEmeraldsOwned).map((emerald, index) => (
+              <Image
+                key={`chaos-emerald-${index + 1}`}
+                source={emerald}
+                style={styles.emeraldImage}
+              />
+            ))}
+          </View>
           {capsuleVisible && (
             <Pressable
               onPress={onCapsule}
@@ -566,21 +601,15 @@ export default function App() {
   const [capsulePosition, setCapsulePosition] = useState({ left: '20%', top: '10%' });
   const capsuleVisibleRef = useRef(false);
   const capsuleTimeoutRef = useRef(null);
-  const [redUpgrades, setRedUpgrades] = useState({
-    speedShoes: { price: 2, level: 0 },
-    starfall: { price: 10, level: 0 },
-    chipBracelet: { price: 50, stock: 1 },
-    chaosEmerald: { price: 100, stock: 7 },
-    masterEmerald: { price: 1000, stock: 1 },
-    superEmerald: { price: 1000, stock: 7 },
-    warpTopaz: { price: 8, level: 0 },
-    robotTeleporter: { price: 8, level: 0 },
-  });
+  const [redUpgrades, setRedUpgrades] = useState(createRedUpgrades);
   const [ownedCharacters, setOwnedCharacters] = useState(
     passiveCharacters.map((character) => ({ ...character, count: 0 })),
   );
   const [activeUpgradeCosts, setActiveUpgradeCosts] = useState(
     Object.fromEntries(activeUpgrades.map((upgrade) => [upgrade.name, upgrade.cost])),
+  );
+  const [activeUpgradeLevels, setActiveUpgradeLevels] = useState(
+    Object.fromEntries(activeUpgrades.map((upgrade) => [upgrade.name, 0])),
   );
   const activeLevel = levels.find((level) => level.name === selectedZone);
   const backgroundMultipliers = {
@@ -632,9 +661,14 @@ export default function App() {
       setTimeStones(roundedGame.timeStones || 0);
       setTimePrice(roundedGame.timePrice || 100);
       setSuperMult(roundedGame.superMult || 1);
-      setRedUpgrades(roundedGame.redUpgrades || redUpgrades);
+      setRedUpgrades(roundedGame.redUpgrades || createRedUpgrades());
       setOwnedCharacters(roundedGame.ownedCharacters || ownedCharacters);
       setActiveUpgradeCosts(roundedGame.activeUpgradeCosts || activeUpgradeCosts);
+      setActiveUpgradeLevels(
+        Object.keys(roundedGame.activeUpgradeLevels || {}).length
+          ? roundedGame.activeUpgradeLevels
+          : activeUpgradeLevels,
+      );
     }
 
     initializeAuth().catch((error) => {
@@ -714,6 +748,7 @@ export default function App() {
     redUpgrades,
     ownedCharacters,
     activeUpgradeCosts,
+    activeUpgradeLevels,
     rebirths: baseMult - 1,
   });
   gameSnapshotRef.current = gameSnapshot;
@@ -798,6 +833,10 @@ export default function App() {
     if (rings < cost) return;
     setRings((value) => value - cost);
     setUpgrade((value) => value + upgrade.gain);
+    setActiveUpgradeLevels((current) => ({
+      ...current,
+      [upgrade.name]: (current[upgrade.name] || 0) + 1,
+    }));
     setActiveUpgradeCosts((current) => ({
       ...current,
       [upgrade.name]: roundedValue(current[upgrade.name] * 1.2),
@@ -814,11 +853,14 @@ export default function App() {
       setRingsPerSec(0);
       setRngRed(20);
       setClickRedRate(0);
+      setSuperMult(1);
       setTickSpeed(1000);
       setTimeStones(0);
       setTimePrice(roundedValue(100 * baseMult * 2));
+      setRedUpgrades(createRedUpgrades());
       setOwnedCharacters(passiveCharacters.map((character) => ({ ...character, count: 0 })));
       setActiveUpgradeCosts(Object.fromEntries(activeUpgrades.map((upgrade) => [upgrade.name, upgrade.cost])));
+      setActiveUpgradeLevels(Object.fromEntries(activeUpgrades.map((upgrade) => [upgrade.name, 0])));
       return;
     }
     if (rings < timePrice) return;
@@ -868,6 +910,7 @@ export default function App() {
           rebirths={rebirths}
           superMult={superMult}
           currentZone={selectedZone}
+          chaosEmeraldsOwned={7 - redUpgrades.chaosEmerald.stock}
           ringsPerClick={ringsPerClick}
           ringsPerSec={effectiveRingsPerSec}
           timeStones={timeStones}
@@ -967,16 +1010,18 @@ const styles = StyleSheet.create({
   redStatCard: { backgroundColor: 'rgba(255, 64, 81, .3)' },
   statCardLabel: { color: '#fff', fontSize: 8, fontWeight: '900', textAlign: 'center' },
   statCardValue: { color: '#ffe75c', fontSize: 15, fontWeight: '900', marginTop: 1 },
-  goalStage: { width: '100%', height: 245, position: 'relative', alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
+  goalStage: { width: '100%', height: 340, position: 'relative', alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
   goalButton: { width: 200, height: 200, borderRadius: 75, alignItems: 'center', justifyContent: 'center' },
   goalPressed: { transform: [{ scale: 0.94 }] },
   goalImage: { width: 200, height: 200, resizeMode: 'contain' },
+  emeraldRow: { position: 'absolute', bottom: 8, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', zIndex: 2 },
+  emeraldImage: { width: 30, height: 30, resizeMode: 'contain', marginHorizontal: 2 },
   characterBadge: { position: 'absolute', width: 70, alignItems: 'center', zIndex: 2 },
-  characterTopLeft: { top: 8, left: 18 },
-  characterTopRight: { top: 8, right: 18 },
-  characterLeft: { left: 8, top: 91 },
-  characterRight: { right: 8, top: 91 },
-  characterBottom: { bottom: 3, left: '42%' },
+  characterTopLeft: { top: 0, left: '50%', transform: [{ translateX: -220 }, { translateY: 20 }] },
+  characterTopRight: { top: 0, left: '50%', transform: [{ translateX: -40 }, { translateY: 20 }] },
+  characterLeft: { top: 50, left: '50%', transform: [{ translateX: -290 }, { translateY: 30 }] },
+  characterRight: { top: 50, left: '50%', transform: [{ translateX: 25 }, { translateY: 30 }] },
+  characterTop: { top: -20, left: '50%', transform: [{ translateX: -130 }, { translateY: 20 }] },
   characterIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
   characterInitial: { color: '#fff', fontSize: 22, fontWeight: '900' },
   characterCount: { color: '#fff', backgroundColor: navy, borderRadius: 8, paddingHorizontal: 5, fontSize: 12, fontWeight: '900', marginTop: -7 },
