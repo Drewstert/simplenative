@@ -115,11 +115,12 @@ function Button({ children, onPress, wide = false, disabled = false }) {
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      accessibilityRole="button"
       style={({ pressed }) => [
         styles.button,
         wide && styles.wideButton,
         disabled && styles.disabledButton,
-        pressed && styles.pressed,
+        pressed && !disabled && styles.buttonPressed,
       ]}
     >
       <Text style={styles.buttonText}>{children}</Text>
@@ -219,7 +220,7 @@ function ClickerScreen({
               <Text style={styles.statCardValue}>{roundedValue(redRings)}</Text>
             </View>
             <View style={[styles.statCard, styles.redStatCard]}>
-              <Text style={styles.statCardLabel}>RED RINGS / CAPSULE</Text>
+              <Text style={styles.statCardLabel}>RED RINGS / DROP</Text>
               <Text style={styles.statCardValue}>{roundedValue(redRingDrop)}</Text>
             </View>
             <View style={[styles.statCard, styles.redStatCard]}>
@@ -367,7 +368,7 @@ function MarketScreen({ navigate, page, rings, redRings, passiveCharacters: owne
         <ImageBackground source={backgrounds.market} style={styles.marketArtwork} imageStyle={styles.marketBackground}>
           <View style={styles.marketHeader}><Text style={styles.marketLogo}>💧 Black Market</Text><Text style={styles.marketJapanese}>闇の取引所</Text></View>
           <View style={styles.marketRedBalance}>
-            <Text>RED RINGS</Text>
+            <Text style={styles.marketRedLabel}>RED RINGS</Text>
             <Text style={styles.marketRedCount}>{roundedValue(redRings)}</Text>
           </View>
         </ImageBackground>
@@ -954,11 +955,29 @@ const styles = StyleSheet.create({
   rebirthInfoTitle: { color: '#ffe75c', fontSize: 13, fontWeight: '900', textAlign: 'center' },
   rebirthInfoText: { color: '#fff', fontSize: 12, lineHeight: 16, textAlign: 'center', marginTop: 3 },
   rebirthInfoProgress: { color: '#ff5964', fontSize: 12, fontWeight: '900', textAlign: 'center', marginTop: 4 },
-  mainButtons: { width: '100%', marginTop: 'auto', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
-  button: { backgroundColor: orange, borderColor: '#9b6500', borderWidth: 1, borderRadius: 5, minWidth: 112, paddingHorizontal: 10, paddingVertical: 10, alignItems: 'center', margin: 4 },
-  wideButton: { minWidth: 132 },
-  disabledButton: { backgroundColor: '#7d8791', borderColor: '#5d6670' },
-  buttonText: { color: '#fff', fontSize: 17, fontWeight: '900', textAlign: 'center' },
+  mainButtons: { width: '100%', marginTop: 'auto', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', paddingTop: 4 },
+  button: {
+    backgroundColor: '#ffb703',
+    borderColor: '#d88700',
+    borderWidth: 1,
+    borderRadius: 12,
+    minWidth: 112,
+    minHeight: 46,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: 4,
+    shadowColor: '#06143d',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  wideButton: { minWidth: 150 },
+  disabledButton: { backgroundColor: '#687386', borderColor: '#4d586b', shadowOpacity: 0, elevation: 0 },
+  buttonText: { color: '#071d5a', fontSize: 15, fontWeight: '900', textAlign: 'center' },
+  buttonPressed: { opacity: 0.82, transform: [{ translateY: 2 }], shadowOpacity: 0.12, elevation: 1 },
   pressed: { opacity: 0.65 },
   pageTitle: { color: '#4a5360', fontSize: 31, fontWeight: '900', textAlign: 'center', marginVertical: 8 },
   levelGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', flex: 1 },
@@ -966,29 +985,29 @@ const styles = StyleSheet.create({
   level: { width: '46%', alignItems: 'center', marginVertical: 5 },
   levelImage: { width: 86, height: 125, resizeMode: 'cover' },
   levelRequirement: { color: '#4b5663', fontSize: 15, fontWeight: '900', textAlign: 'center', marginVertical: 3 },
-  marketScreen: { backgroundColor: '#45465f', alignItems: 'stretch' },
-  ringShopScreen: { backgroundColor: '#db686d', alignItems: 'stretch' },
-  marketArtwork: { width: '100%', height: 245 },
-  ringShopHeader: { width: '100%', backgroundColor: 'rgba(255, 255, 255, .75)', borderBottomWidth: 2, borderColor: '#fff', padding: 14 },
-  ringShopTitle: { color: '#b52432', fontSize: 28, fontWeight: '900' },
-  ringShopSubtitle: { color: '#fff', fontSize: 14, fontWeight: '900', marginTop: 4 },
+  marketScreen: { backgroundColor: '#241a36', alignItems: 'stretch' },
+  ringShopScreen: { backgroundColor: '#7d2638', alignItems: 'stretch' },
+  marketArtwork: { width: '100%', height: 245, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#d94b57' },
+  ringShopHeader: { width: '100%', backgroundColor: 'rgba(5, 28, 91, .96)', borderBottomWidth: 2, borderColor: '#ffb703', borderRadius: 8, padding: 14, marginBottom: 4 },
+  ringShopTitle: { color: '#ffe75c', fontSize: 28, fontWeight: '900' },
+  ringShopSubtitle: { color: '#e5edff', fontSize: 14, fontWeight: '700', marginTop: 4 },
   ringShopBalance: { color: '#fff', fontSize: 17, fontWeight: '900', marginTop: 8 },
   marketBackground: { opacity: 0.9 },
-  marketHeader: { backgroundColor: '#a82e3a', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, flexDirection: 'row', justifyContent: 'space-between' },
-  marketLogo: { color: '#fff', fontSize: 22, fontWeight: '900' },
-  marketJapanese: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  marketHeader: { backgroundColor: 'rgba(27, 16, 54, .96)', borderBottomWidth: 2, borderColor: '#ff5964', paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  marketLogo: { color: '#ffe75c', fontSize: 22, fontWeight: '900' },
+  marketJapanese: { color: '#f4d8df', fontSize: 14, fontWeight: '900' },
   marketWelcomeRow: { flexDirection: 'row', alignItems: 'stretch', justifyContent: 'flex-end', marginTop: 155 },
   marketWelcome: { flex: 1, backgroundColor: '#b83440', padding: 10 },
-  marketRedBalance: { width: '30%', height: 50, backgroundColor: '#b83440', padding: 0, alignItems: 'center', justifyContent: 'center' },
-  marketRedCount: { color: '#fff', fontSize: 18, fontWeight: '900', marginTop: 3 },
-  marketWelcomeText: { color: '#fff', fontSize: 15 },
+  marketRedBalance: { width: '28%', height: 40, backgroundColor: 'rgba(156, 53, 53, 0.96)', borderWidth: 1, borderColor: '#ff5964', borderRadius: 8, padding: 0, alignSelf: 'flex-end', marginTop: 153, marginRight: 8, alignItems: 'center', justifyContent: 'center' },
+  marketRedLabel: { color: '#fff', fontSize: 10, marginTop: 3 },
+  marketRedCount: { color: '#ffffff', fontSize: 16, fontWeight: '900', marginTop: 0 },
   marketBody: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', marginTop: 10 },
   shopScroll: { width: '100%', flex: 1 },
   ringShopColumns: { width: '100%', flexDirection: 'row', justifyContent: 'space-between' },
   upgradeColumn: { width: '49%', alignItems: 'center' },
   columnShopItem: { width: '100%' },
-  shopColumnTitle: { width: '100%', color: '#fff', backgroundColor: '#d55f65', borderWidth: 1, borderColor: '#fff', fontSize: 20, fontWeight: '900', textAlign: 'center', paddingVertical: 5, marginBottom: 4 },
-  shopItem: { width: '46%', alignItems: 'center', marginBottom: 8 },
+  shopColumnTitle: { width: '100%', color: '#ffe75c', backgroundColor: '#142b68', borderWidth: 1, borderColor: '#5d7bc4', borderRadius: 6, fontSize: 18, fontWeight: '900', textAlign: 'center', paddingVertical: 7, marginBottom: 6 },
+  shopItem: { width: '46%', backgroundColor: 'rgba(27, 16, 54, .72)', borderWidth: 1, borderColor: '#6f3a5b', borderRadius: 8, alignItems: 'center', padding: 8, marginBottom: 8 },
   shopCharacterIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff', marginBottom: 3 },
   shopName: { color: '#fff', fontSize: 15, fontWeight: '900', textAlign: 'center' },
   shopDetail: { color: '#fff', fontSize: 14, fontWeight: '900', textAlign: 'center', minHeight: 34 },
