@@ -219,6 +219,7 @@ function ClickerScreen({
   superMult,
   currentZone,
   chaosEmeraldsOwned,
+  superEmeraldsOwned,
   ringsPerClick,
   ringsPerSec,
   timeStones,
@@ -293,7 +294,10 @@ function ClickerScreen({
               <Image
                 key={`chaos-emerald-${index + 1}`}
                 source={emerald}
-                style={styles.emeraldImage}
+                style={[
+                  styles.emeraldImage,
+                  index < superEmeraldsOwned && styles.superEmeraldBoosted,
+                ]}
               />
             ))}
           </View>
@@ -911,6 +915,7 @@ export default function App() {
           superMult={superMult}
           currentZone={selectedZone}
           chaosEmeraldsOwned={7 - redUpgrades.chaosEmerald.stock}
+          superEmeraldsOwned={7 - redUpgrades.superEmerald.stock}
           ringsPerClick={ringsPerClick}
           ringsPerSec={effectiveRingsPerSec}
           timeStones={timeStones}
@@ -1015,7 +1020,8 @@ const styles = StyleSheet.create({
   goalPressed: { transform: [{ scale: 0.94 }] },
   goalImage: { width: 200, height: 200, resizeMode: 'contain' },
   emeraldRow: { position: 'absolute', bottom: 8, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', zIndex: 2 },
-  emeraldImage: { width: 30, height: 30, resizeMode: 'contain', marginHorizontal: 2 },
+  emeraldImage: { width: 30, height: 30, resizeMode: 'contain', marginHorizontal: 8 },
+  superEmeraldBoosted: { transform: [{ scale: 1.5 }] },
   characterBadge: { position: 'absolute', width: 70, alignItems: 'center', zIndex: 2 },
   characterTopLeft: { top: 0, left: '50%', transform: [{ translateX: -220 }, { translateY: 20 }] },
   characterTopRight: { top: 0, left: '50%', transform: [{ translateX: -40 }, { translateY: 20 }] },
