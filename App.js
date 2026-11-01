@@ -18,6 +18,12 @@ import { loadGame, loadLeaderboard, saveGame } from './lib/gameData';
 const orange = '#ffa500';
 const navy = '#071d5a';
 const roundedValue = (value) => Math.round(value);
+const formatDisplayNumber = (value) => {
+  const rounded = roundedValue(value);
+  return Math.abs(rounded) >= 1000000000
+    ? rounded.toExponential(2).replace('e+', 'e')
+    : rounded.toLocaleString('en-US');
+};
 const roundIfNumber = (value) => (typeof value === 'number' ? roundedValue(value) : value);
 const formatTickSpeed = (milliseconds) => `${(milliseconds / 1000).toFixed(1)}s`;
 const roundGameState = (game) => ({
@@ -105,7 +111,7 @@ const characterPositions = [
 function StatLine({ label, value, valueStyle = styles.statValue }) {
   return (
     <Text style={styles.statLine}>
-      {label}: <Text style={valueStyle}>{roundedValue(value)}</Text>
+      {label}: <Text style={valueStyle}>{formatDisplayNumber(value)}</Text>
     </Text>
   );
 }
@@ -123,7 +129,9 @@ function Button({ children, onPress, wide = false, disabled = false }) {
         pressed && !disabled && styles.buttonPressed,
       ]}
     >
-      <Text style={styles.buttonText}>{children}</Text>
+      <Text style={styles.buttonText}>
+        {typeof children === 'number' ? formatDisplayNumber(children) : children}
+      </Text>
     </Pressable>
   );
 }
@@ -183,6 +191,8 @@ function ClickerScreen({
   redRingClickRate,
   capsuleSpawnRate,
   rebirths,
+  superMult,
+  currentZone,
   ringsPerClick,
   ringsPerSec,
   timeStones,
@@ -205,23 +215,23 @@ function ClickerScreen({
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Text style={styles.statCardLabel}>RINGS</Text>
-              <Text style={styles.statCardValue}>{roundedValue(rings)}</Text>
+              <Text style={styles.statCardValue}>{formatDisplayNumber(rings)}</Text>
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statCardLabel}>RINGS / CLICK</Text>
-              <Text style={styles.statCardValue}>{roundedValue(ringsPerClick)}</Text>
+              <Text style={styles.statCardValue}>{formatDisplayNumber(ringsPerClick)}</Text>
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statCardLabel}>RINGS / SECOND</Text>
-              <Text style={styles.statCardValue}>{roundedValue(ringsPerSec)}</Text>
+              <Text style={styles.statCardValue}>{formatDisplayNumber(ringsPerSec)}</Text>
             </View>
             <View style={[styles.statCard, styles.redStatCard]}>
               <Text style={styles.statCardLabel}>RED RINGS</Text>
-              <Text style={styles.statCardValue}>{roundedValue(redRings)}</Text>
+              <Text style={styles.statCardValue}>{formatDisplayNumber(redRings)}</Text>
             </View>
             <View style={[styles.statCard, styles.redStatCard]}>
               <Text style={styles.statCardLabel}>RED RINGS / DROP</Text>
-              <Text style={styles.statCardValue}>{roundedValue(redRingDrop)}</Text>
+              <Text style={styles.statCardValue}>{formatDisplayNumber(redRingDrop)}</Text>
             </View>
             <View style={[styles.statCard, styles.redStatCard]}>
               <Text style={styles.statCardLabel}>RED RING CHANCE / CLICK</Text>
@@ -280,8 +290,22 @@ function ClickerScreen({
           </Text>
         </View>
 
+        <View style={styles.formZoneRow}>
+          <View style={styles.formInfo}>
+            <Text style={styles.formInfoLabel}>CURRENT FORM</Text>
+            <Text style={styles.formDisplay}>
+              {superMult >= 3 ? 'Hyper' : superMult >= 2 ? 'Super' : 'Base'} Form
+            </Text>
+            <Text style={styles.formMultiplier}>{formatDisplayNumber(superMult)}x multiplier</Text>
+          </View>
+          <View style={styles.formInfo}>
+            <Text style={styles.formInfoLabel}>CURRENT ZONE</Text>
+            <Text style={styles.formDisplay}>{currentZone || 'Green Hill'}</Text>
+          </View>
+        </View>
+
         <View style={styles.mainButtons}>
-          <Button onPress={onTimeStone}>{timeStones === 7 ? 'Rebirth' : `Time Stone: ${roundedValue(timePrice)}`}</Button>
+          <Button onPress={onTimeStone}>{timeStones === 7 ? 'Rebirth' : `Time Stone: ${formatDisplayNumber(timePrice)}`}</Button>
           <Button onPress={() => navigate('stats')}>Stats/Save</Button>
           <Button onPress={() => navigate('upgrades')}>Ring Shop</Button>
           <Button onPress={() => navigate('levels')}>Zone Select</Button>
@@ -334,7 +358,7 @@ function UpgradeColumn({ title, upgrades, getDetail, getPrice, onPurchase }) {
           <Text style={styles.shopName}>{upgrade.name}</Text>
           <Text style={styles.shopDetail}>{getDetail(upgrade)}</Text>
           <Button onPress={() => onPurchase(upgrade)}>
-            {roundedValue(getPrice(upgrade))}
+            {formatDisplayNumber(getPrice(upgrade))}
           </Button>
         </View>
       ))}
@@ -352,7 +376,12 @@ function MarketScreen({ navigate, page, rings, redRings, passiveCharacters: owne
      { key: 'starfall', name: 'Starfall', detail: '+1x' },
      { key: 'masterEmerald', name: 'Master Emerald', detail: '+50x', stock: `${redUpgrades.masterEmerald.stock}/1` },
      { key: 'chipBracelet', name: "Chip's Bracelet", detail: '+5x', stock: `${redUpgrades.chipBracelet.stock}/1` },
-     { key: 'superEmerald', name: 'Super Emerald', detail: '+25x', stock: `${redUpgrades.superEmerald.stock}/7` },
+     {
+       key: 'superEmerald',
+       name: 'Super Emerald',
+       detail: 'Requires all 7 Chaos Emeralds and the Master Emerald',
+       stock: `${redUpgrades.superEmerald.stock}/7`,
+     },
     ] : [
      { key: 'warpTopaz', name: 'Warp Topaz', detail: 'Red ring spawn +0.1%' },
      { key: 'robotTeleporter', name: 'Robot Teleporter', detail: 'Capsule rate +0.5%' },
@@ -361,6 +390,7 @@ function MarketScreen({ navigate, page, rings, redRings, passiveCharacters: owne
   const toggleRedShopPage = () => {
     setRedShopPage((currentPage) => (currentPage === 'items' ? 'rates' : 'items'));
   };
+  const superEmeraldLocked = redUpgrades.chaosEmerald.stock > 0 || redUpgrades.masterEmerald.stock > 0;
 
   return (
     <View style={[styles.screen, blackMarket ? styles.marketScreen : styles.ringShopScreen]}>
@@ -369,7 +399,7 @@ function MarketScreen({ navigate, page, rings, redRings, passiveCharacters: owne
           <View style={styles.marketHeader}><Text style={styles.marketLogo}>💧 Black Market</Text><Text style={styles.marketJapanese}>闇の取引所</Text></View>
           <View style={styles.marketRedBalance}>
             <Text style={styles.marketRedLabel}>RED RINGS</Text>
-            <Text style={styles.marketRedCount}>{roundedValue(redRings)}</Text>
+            <Text style={styles.marketRedCount}>{formatDisplayNumber(redRings)}</Text>
           </View>
         </ImageBackground>
       )}
@@ -377,7 +407,7 @@ function MarketScreen({ navigate, page, rings, redRings, passiveCharacters: owne
         <View style={styles.ringShopHeader}>
           <Text style={styles.ringShopTitle}>Ring Shop</Text>
           <Text style={styles.ringShopSubtitle}>Buy Sonic characters to earn passive rings.</Text>
-          <Text style={styles.ringShopBalance}>RINGS: {roundedValue(rings)}</Text>
+          <Text style={styles.ringShopBalance}>RINGS: {formatDisplayNumber(rings)}</Text>
         </View>
       )}
       <Button onPress={() => navigate('home')}>Back</Button>
@@ -391,8 +421,15 @@ function MarketScreen({ navigate, page, rings, redRings, passiveCharacters: owne
             <Text style={styles.shopName}>{item.name}</Text>
             <Text style={styles.shopDetail}>{item.detail}</Text>
             {item.stock && <Text style={styles.shopStock}>{item.stock}</Text>}
-            <Button onPress={() => onPurchaseRedUpgrade(item)}>
-              {redUpgrades[item.key].stock === 0 ? 'Sold Out' : `${roundedValue(redUpgrades[item.key].price)} Red`}
+            <Button
+              onPress={() => onPurchaseRedUpgrade(item)}
+              disabled={item.key === 'superEmerald' && superEmeraldLocked}
+            >
+              {item.key === 'superEmerald' && superEmeraldLocked
+                ? 'Locked'
+                : redUpgrades[item.key].stock === 0
+                  ? 'Sold Out'
+                  : `${formatDisplayNumber(redUpgrades[item.key].price)} Red`}
             </Button>
           </View>
         )        ) : (
@@ -407,7 +444,7 @@ function MarketScreen({ navigate, page, rings, redRings, passiveCharacters: owne
             <UpgradeColumn
               title="Passive"
               upgrades={ownedCharacters}
-              getDetail={(character) => `+${character.gain} RPS`}
+              getDetail={(character) => `+${formatDisplayNumber(character.gain)} RPS`}
               getPrice={(character) => character.cost}
               onPurchase={onPurchase}
             />
@@ -438,11 +475,11 @@ function StatsScreen({
   navigate,
 }) {
   const statValues = [
-    roundedValue(ringsPerClick),
-    roundedValue(ringsPerSec),
-    roundedValue(redPerEvent),
-    roundedValue(upgradeMult),
-    roundedValue(superMult),
+    formatDisplayNumber(ringsPerClick),
+    formatDisplayNumber(ringsPerSec),
+    formatDisplayNumber(redPerEvent),
+    formatDisplayNumber(upgradeMult),
+    formatDisplayNumber(superMult),
     formatTickSpeed(tickSpeed),
   ];
 
@@ -490,7 +527,7 @@ function Leaderboard({ rows, loading, error, navigate }) {
           <View style={styles.leaderboardRow} key={`${row.username}-${index}`}>
             <Text style={styles.leaderboardCell}>{row.username}</Text>
             <Text style={styles.leaderboardCell}>{row.rebirths}</Text>
-            <Text style={styles.leaderboardCell}>{roundedValue(row.rings)}</Text>
+            <Text style={styles.leaderboardCell}>{formatDisplayNumber(row.rings)}</Text>
           </View>
         ))}
       </View>
@@ -793,7 +830,9 @@ export default function App() {
   const purchaseRedUpgrade = (item) => {
     const upgrade = redUpgrades[item.key];
     if (redRings < upgrade.price || upgrade.stock === 0) return;
-    if (item.key === 'superEmerald' && redUpgrades.chaosEmerald.stock + redUpgrades.masterEmerald.stock > 0) return;
+    const allChaosEmeraldsOwned = redUpgrades.chaosEmerald.stock === 0;
+    const masterEmeraldOwned = redUpgrades.masterEmerald.stock === 0;
+    if (item.key === 'superEmerald' && (!allChaosEmeraldsOwned || !masterEmeraldOwned)) return;
     const priceMultiplier = ['warpTopaz', 'robotTeleporter'].includes(item.key) ? 1.8 : 1.5;
     setRedUpgrades((current) => ({
       ...current,
@@ -827,6 +866,8 @@ export default function App() {
           redRingClickRate={clickRedRate * backgroundMultipliers.redRate}
           capsuleSpawnRate={rngRed}
           rebirths={rebirths}
+          superMult={superMult}
+          currentZone={selectedZone}
           ringsPerClick={ringsPerClick}
           ringsPerSec={effectiveRingsPerSec}
           timeStones={timeStones}
@@ -955,6 +996,11 @@ const styles = StyleSheet.create({
   rebirthInfoTitle: { color: '#ffe75c', fontSize: 13, fontWeight: '900', textAlign: 'center' },
   rebirthInfoText: { color: '#fff', fontSize: 12, lineHeight: 16, textAlign: 'center', marginTop: 3 },
   rebirthInfoProgress: { color: '#ff5964', fontSize: 12, fontWeight: '900', textAlign: 'center', marginTop: 4 },
+  formZoneRow: { width: '96%', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
+  formInfo: { width: '49%', minHeight: 66, backgroundColor: 'rgba(20, 43, 104, .94)', borderWidth: 1, borderColor: '#7de2ff', borderRadius: 6, padding: 7, alignItems: 'center', justifyContent: 'center' },
+  formInfoLabel: { color: '#d9e3ff', fontSize: 10, fontWeight: '900' },
+  formDisplay: { color: '#7de2ff', fontSize: 16, fontWeight: '900', marginTop: 2 },
+  formMultiplier: { color: '#ffe75c', fontSize: 12, fontWeight: '900', marginTop: 1 },
   mainButtons: { width: '100%', marginTop: 'auto', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', paddingTop: 4 },
   button: {
     backgroundColor: '#ffb703',
