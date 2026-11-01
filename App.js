@@ -137,7 +137,7 @@ function Placeholder({ label = 'IMAGE' }) {
   );
 }
 
-function TopBar({ rings, redRings, onBack, title = 'Sonic Clicker' }) {
+function TopBar({ onBack, title = 'Sonic Clicker' }) {
   return (
     <View style={styles.topBar}>
       {onBack ? (
@@ -146,10 +146,7 @@ function TopBar({ rings, redRings, onBack, title = 'Sonic Clicker' }) {
         </Pressable>
       ) : <View style={styles.backArrow} />}
       <Text style={styles.topTitle}>{title}</Text>
-      <View style={styles.currency}>
-        <Text style={styles.currencyText}>RINGS: {roundedValue(rings)}</Text>
-        <Text style={styles.redCurrency}>RED: {roundedValue(redRings)}</Text>
-      </View>
+      <View style={styles.topBarSpacer} />
     </View>
   );
 }
@@ -181,6 +178,10 @@ function CharacterBadge({ character, count, position }) {
 function ClickerScreen({
   rings,
   redRings,
+  redRingDrop,
+  redRingClickRate,
+  capsuleSpawnRate,
+  rebirths,
   ringsPerClick,
   ringsPerSec,
   timeStones,
@@ -196,18 +197,48 @@ function ClickerScreen({
 }) {
   return (
     <ImageBackground source={backgroundSource} style={styles.screen} imageStyle={styles.backgroundImage}>
-      <TopBar rings={rings} redRings={redRings} title="Sonic Clicker" />
+      <TopBar title="Sonic Clicker" />
       <ScrollView contentContainerStyle={styles.clickerContent}>
         <View style={styles.clickStats}>
-          <Text style={styles.bigStat}>Rings: <Text style={styles.bigStatValue}>{roundedValue(rings)}</Text></Text>
-          <StatLine label="Rings Per Click" value={ringsPerClick} />
-          <StatLine label="Rings Per Second" value={ringsPerSec} />
-          <Text style={styles.redStat}>
-            Red Rings: <Text style={styles.redStatValue}>{roundedValue(redRings)}</Text>
-          </Text>
-          <Text style={styles.statLine}>
-            Time Stones: <Text style={styles.statValue}>{timeStones} / 7</Text>
-          </Text>
+          <Text style={styles.statsTitle}>GAME STATS</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Text style={styles.statCardLabel}>RINGS</Text>
+              <Text style={styles.statCardValue}>{roundedValue(rings)}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statCardLabel}>RINGS / CLICK</Text>
+              <Text style={styles.statCardValue}>{roundedValue(ringsPerClick)}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statCardLabel}>RINGS / SECOND</Text>
+              <Text style={styles.statCardValue}>{roundedValue(ringsPerSec)}</Text>
+            </View>
+            <View style={[styles.statCard, styles.redStatCard]}>
+              <Text style={styles.statCardLabel}>RED RINGS</Text>
+              <Text style={styles.statCardValue}>{roundedValue(redRings)}</Text>
+            </View>
+            <View style={[styles.statCard, styles.redStatCard]}>
+              <Text style={styles.statCardLabel}>RED RINGS / CAPSULE</Text>
+              <Text style={styles.statCardValue}>{roundedValue(redRingDrop)}</Text>
+            </View>
+            <View style={[styles.statCard, styles.redStatCard]}>
+              <Text style={styles.statCardLabel}>RED RING CHANCE / CLICK</Text>
+              <Text style={styles.statCardValue}>{(redRingClickRate / 10).toFixed(1)}%</Text>
+            </View>
+            <View style={[styles.statCard, styles.redStatCard]}>
+              <Text style={styles.statCardLabel}>CAPSULE CHANCE / TICK</Text>
+              <Text style={styles.statCardValue}>{(capsuleSpawnRate / 10).toFixed(1)}%</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statCardLabel}>TIME STONES</Text>
+              <Text style={styles.statCardValue}>{timeStones}/7</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statCardLabel}>REBIRTHS</Text>
+              <Text style={styles.statCardValue}>{rebirths}</Text>
+            </View>
+          </View>
         </View>
 
         <View style={styles.goalStage}>
@@ -220,9 +251,6 @@ function ClickerScreen({
           >
             <Image source={require('./assets/goal-ring.png')} style={styles.goalImage} />
           </Pressable>
-        </View>
-
-        <View style={styles.capsuleSlot}>
           {capsuleVisible && (
             <Pressable
               onPress={onCapsule}
@@ -237,6 +265,18 @@ function ClickerScreen({
               <Text style={styles.capsuleText}>RED RING CAPSULE!</Text>
             </Pressable>
           )}
+        </View>
+
+        <View style={styles.rebirthInfo}>
+          <Text style={styles.rebirthInfoTitle}>REBIRTH MECHANICS</Text>
+          <Text style={styles.rebirthInfoText}>
+            Each Time Stone makes the game tick faster. Buy 7 Time Stones to rebirth.
+            Rebirthing resets your rings, upgrades, characters, and speed, but permanently doubles your ring multiplier
+            and unlocks new zones.
+          </Text>
+          <Text style={styles.rebirthInfoProgress}>
+            Time Stones: {timeStones}/7
+          </Text>
         </View>
 
         <View style={styles.mainButtons}>
@@ -486,6 +526,8 @@ export default function App() {
   const [redRings, setRedRings] = useState(0);
   const [capsuleVisible, setCapsuleVisible] = useState(false);
   const [capsulePosition, setCapsulePosition] = useState({ left: '20%', top: '10%' });
+  const capsuleVisibleRef = useRef(false);
+  const capsuleTimeoutRef = useRef(null);
   const [redUpgrades, setRedUpgrades] = useState({
     speedShoes: { price: 2, level: 0 },
     starfall: { price: 10, level: 0 },
@@ -576,17 +618,32 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    capsuleVisibleRef.current = capsuleVisible;
+  }, [capsuleVisible]);
+
+  useEffect(() => {
     const capsuleTick = setInterval(() => {
-      if (rngRed >= Math.floor(Math.random() * 1000) || rngRed >= Math.floor(Math.random() * 100000)) {
+      if (rngRed >= Math.random() * 1000 && !capsuleVisibleRef.current) {
         setCapsulePosition({
-          left: `${5 + Math.floor(Math.random() * 65)}%`,
-          top: `${5 + Math.floor(Math.random() * 35)}%`,
+          left: `${4 + Math.floor(Math.random() * 45)}%`,
+          top: `${5 + Math.floor(Math.random() * 20)}%`,
         });
         setCapsuleVisible(true);
-        setTimeout(() => setCapsuleVisible(false), 3000);
+        capsuleVisibleRef.current = true;
+        capsuleTimeoutRef.current = setTimeout(() => {
+          setCapsuleVisible(false);
+          capsuleVisibleRef.current = false;
+          capsuleTimeoutRef.current = null;
+        }, 3000);
       }
     }, tickSpeed);
-    return () => clearInterval(capsuleTick);
+    return () => {
+      clearInterval(capsuleTick);
+      if (capsuleTimeoutRef.current) {
+        clearTimeout(capsuleTimeoutRef.current);
+        capsuleTimeoutRef.current = null;
+      }
+    };
   }, [rngRed, tickSpeed]);
 
   useEffect(() => {
@@ -683,6 +740,11 @@ export default function App() {
   const collectCapsule = () => {
     setRedRings((value) => roundedValue(value + (redDrop + baseMult / 2) * backgroundMultipliers.red));
     setCapsuleVisible(false);
+    capsuleVisibleRef.current = false;
+    if (capsuleTimeoutRef.current) {
+      clearTimeout(capsuleTimeoutRef.current);
+      capsuleTimeoutRef.current = null;
+    }
   };
 
   const purchaseCharacter = (character) => {
@@ -760,6 +822,10 @@ export default function App() {
         <ClickerScreen
           rings={rings}
           redRings={redRings}
+          redRingDrop={(redDrop + baseMult / 2) * backgroundMultipliers.red}
+          redRingClickRate={clickRedRate * backgroundMultipliers.redRate}
+          capsuleSpawnRate={rngRed}
+          rebirths={rebirths}
           ringsPerClick={ringsPerClick}
           ringsPerSec={effectiveRingsPerSec}
           timeStones={timeStones}
@@ -850,18 +916,16 @@ const styles = StyleSheet.create({
   topTitle: { color: '#fff', fontSize: 24, fontWeight: '900' },
   backArrow: { width: 38 },
   backArrowText: { color: '#fff', fontSize: 38, lineHeight: 38 },
-  currency: { alignItems: 'flex-end' },
-  currencyText: { color: '#fff', fontSize: 12, fontWeight: '900' },
-  redCurrency: { color: '#ff5964', fontSize: 10, fontWeight: '900' },
+  topBarSpacer: { width: 38 },
   clickerContent: { width: '100%', flexGrow: 1, alignItems: 'center', paddingBottom: 15 },
-  clickStats: { width: '100%', backgroundColor: 'rgba(13, 36, 116, .85)', padding: 7 },
-  bigStat: { color: '#fff', fontSize: 24, fontWeight: '900' },
-  bigStatValue: { color: '#ffe75c' },
-  statLine: { color: '#fff', fontSize: 15, fontWeight: '900', marginTop: 4 },
-  statValue: { color: '#ffe75c' },
-  redStat: { color: '#ff4051', fontSize: 17, fontWeight: '900', marginTop: 5 },
-  redStatValue: { color: '#fff' },
-  goalStage: { width: '100%', height: 245, position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  clickStats: { width: '100%', backgroundColor: 'rgba(13, 36, 116, .9)', borderRadius: 6, padding: 6, marginBottom: 3 },
+  statsTitle: { color: '#ffe75c', fontSize: 12, fontWeight: '900', textAlign: 'center', marginBottom: 4 },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  statCard: { width: '32%', minHeight: 43, backgroundColor: 'rgba(255, 255, 255, .16)', borderRadius: 4, padding: 3, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
+  redStatCard: { backgroundColor: 'rgba(255, 64, 81, .3)' },
+  statCardLabel: { color: '#fff', fontSize: 8, fontWeight: '900', textAlign: 'center' },
+  statCardValue: { color: '#ffe75c', fontSize: 15, fontWeight: '900', marginTop: 1 },
+  goalStage: { width: '100%', height: 245, position: 'relative', alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
   goalButton: { width: 200, height: 200, borderRadius: 75, alignItems: 'center', justifyContent: 'center' },
   goalPressed: { transform: [{ scale: 0.94 }] },
   goalImage: { width: 200, height: 200, resizeMode: 'contain' },
@@ -875,7 +939,6 @@ const styles = StyleSheet.create({
   characterInitial: { color: '#fff', fontSize: 22, fontWeight: '900' },
   characterCount: { color: '#fff', backgroundColor: navy, borderRadius: 8, paddingHorizontal: 5, fontSize: 12, fontWeight: '900', marginTop: -7 },
   characterName: { color: navy, fontSize: 9, fontWeight: '900', textAlign: 'center', marginTop: 2 },
-  capsuleSlot: { width: '100%', height: 110, position: 'relative', overflow: 'hidden' },
   collectibleGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', backgroundColor: 'rgba(205, 215, 227, .68)' },
   collectible: { width: '50%', height: 110, borderWidth: 1, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   collectibleImage: { width: 70, height: 70, resizeMode: 'contain' },
@@ -884,9 +947,13 @@ const styles = StyleSheet.create({
   placeholderSun: { position: 'absolute', width: 22, height: 22, borderRadius: 11, backgroundColor: '#e8b848', top: 16, right: 20 },
   placeholderHill: { width: '130%', height: 45, backgroundColor: '#95a9b5', transform: [{ rotate: '-13deg' }], marginBottom: 25 },
   placeholderText: { position: 'absolute', bottom: 8, color: '#687989', fontSize: 11, fontWeight: '900', backgroundColor: 'rgba(255,255,255,.75)', paddingHorizontal: 5 },
-  capsule: { position: 'absolute', backgroundColor: '#20283e', borderWidth: 2, borderColor: '#ef3340', borderRadius: 10, padding: 4, alignItems: 'center' },
+  capsule: { position: 'absolute', width: 70, height: 80, backgroundColor: '#20283e', borderWidth: 2, borderColor: '#ef3340', borderRadius: 10, padding: 4, alignItems: 'center', justifyContent: 'center', zIndex: 3 },
   capsuleImage: { width: 52, height: 44, resizeMode: 'contain' },
-  capsuleText: { color: '#fff', fontWeight: '900', fontSize: 9 },
+  capsuleText: { width: '100%', color: '#fff', fontWeight: '900', fontSize: 9, textAlign: 'center', marginTop: 2 },
+  rebirthInfo: { width: '96%', backgroundColor: 'rgba(5, 28, 91, .9)', borderWidth: 1, borderColor: '#ffe75c', borderRadius: 6, padding: 8, marginVertical: 5 },
+  rebirthInfoTitle: { color: '#ffe75c', fontSize: 13, fontWeight: '900', textAlign: 'center' },
+  rebirthInfoText: { color: '#fff', fontSize: 12, lineHeight: 16, textAlign: 'center', marginTop: 3 },
+  rebirthInfoProgress: { color: '#ff5964', fontSize: 12, fontWeight: '900', textAlign: 'center', marginTop: 4 },
   mainButtons: { width: '100%', marginTop: 'auto', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
   button: { backgroundColor: orange, borderColor: '#9b6500', borderWidth: 1, borderRadius: 5, minWidth: 112, paddingHorizontal: 10, paddingVertical: 10, alignItems: 'center', margin: 4 },
   wideButton: { minWidth: 132 },
