@@ -18,7 +18,9 @@ import { loadGame, loadLeaderboard, saveGame } from './lib/gameData';
 const orange = '#ffa500';
 const navy = '#071d5a';
 const roundedValue = (value) => Math.round(value);
-const getRedDropForLevel = (level) => roundedValue(2 * (1.2 ** level));
+const getRedDropForLevel = (level) => roundedValue(2 * (1.3 ** level));
+const timeStoneTickBoost = 155;
+const getTickSpeedForTimeStones = (count) => Math.max(1, 1000 - count * timeStoneTickBoost);
 const formatDisplayNumber = (value) => {
   const rounded = roundedValue(value);
   return Math.abs(rounded) >= 1000000000
@@ -26,7 +28,7 @@ const formatDisplayNumber = (value) => {
     : rounded.toLocaleString('en-US');
 };
 const roundIfNumber = (value) => (typeof value === 'number' ? roundedValue(value) : value);
-const formatTickSpeed = (milliseconds) => `${(milliseconds / 1000).toFixed(1)}s`;
+const formatTickSpeed = (milliseconds) => `${(milliseconds / 1000).toFixed(3)}s`;
 const roundGameState = (game) => ({
   ...game,
   rings: roundedValue(game.rings),
@@ -40,6 +42,7 @@ const roundGameState = (game) => ({
   clickRedRate: roundedValue(game.clickRedRate),
   timeStones: roundedValue(game.timeStones),
   timePrice: roundedValue(game.timePrice),
+  tickSpeed: typeof game.tickSpeed === 'number' ? game.tickSpeed : 1000,
   superMult: roundedValue(game.superMult),
   redUpgrades: game.redUpgrades
     ? Object.fromEntries(
@@ -168,11 +171,11 @@ const rebuildPassiveCharacters = (savedCharacters) => passiveCharacters.map((cha
 });
 
 const characterPositions = [
-  styles => styles.characterTopLeft,
-  styles => styles.characterTopRight,
   styles => styles.characterLeft,
-  styles => styles.characterRight,
+  styles => styles.characterTopLeft,
   styles => styles.characterTop,
+  styles => styles.characterTopRight,
+  styles => styles.characterRight,
 ];
 
 function StatLine({ label, value, valueStyle = styles.statValue }) {
@@ -278,12 +281,7 @@ function ClickerScreen({
   return (
     <ImageBackground source={backgroundSource} style={styles.screen} imageStyle={styles.backgroundImage}>
       <TopBar title="Sonic Clicker" />
-      <ScrollView
-        contentContainerStyle={styles.clickerContent}
-        bounces={false}
-        alwaysBounceVertical={false}
-        overScrollMode="never"
-      >
+      <View style={styles.clickerContent}>
         <View style={styles.clickStats}>
           <Text style={styles.statsTitle}>GAME STATS</Text>
           <View style={styles.statsGrid}>
@@ -367,7 +365,7 @@ function ClickerScreen({
         <View style={styles.rebirthInfo}>
           <Text style={styles.rebirthInfoTitle}>REBIRTH MECHANICS</Text>
           <Text style={styles.rebirthInfoText}>
-            Each Time Stone makes the game tick faster. Buy 7 Time Stones to rebirth.
+            Each Time Stone reduces the tick delay by 0.155 seconds. Buy 7 Time Stones to rebirth.
             Rebirthing resets your rings, upgrades, characters, and speed, but permanently doubles your ring multiplier
             and unlocks new zones.
           </Text>
@@ -397,37 +395,81 @@ function ClickerScreen({
           <Button onPress={() => navigate('levels')}>Zone Select</Button>
           <Button onPress={() => navigate('redShop')}>Red Ring Shop</Button>
         </View>
-      </ScrollView>
+      </View>
     </ImageBackground>
   );
 }
 
 function LevelsScreen({ navigate, rebirths, selectedZone, onSelectZone }) {
   return (
-    <View style={[styles.screen, styles.blueScreen]}>
-      <Text style={styles.pageTitle}>Level Select</Text>
-      <Text style={styles.levelProgress}>Rebirths: {rebirths}</Text>
-      <Text style={styles.levelProgress}>
-        Current Zone: {selectedZone || 'Green Hill'}
-      </Text>
-      <Button wide onPress={() => onSelectZone(null)}>Return To Green Hill</Button>
-      <View style={styles.levelGrid}>
-        {levels.map((level) => (
-          <View key={level.name} style={styles.level}>
-            <Image source={level.image} style={styles.levelImage} />
-            <Text style={styles.levelRequirement}>
-              {level.requiredRebirths} Rebirths{'\n'}{level.bonus}
-            </Text>
-            <Button
-              disabled={rebirths < level.requiredRebirths}
-              onPress={() => onSelectZone(level.name)}
-            >
-              {rebirths < level.requiredRebirths ? 'Locked' : level.name}
-            </Button>
+    <View style={[styles.screen, styles.zoneScreen]}>
+      <TopBar title="Zone Select" onBack={() => navigate('home')} />
+      <ScrollView
+        style={styles.zoneScroll}
+        contentContainerStyle={styles.zoneContent}
+        bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
+      >
+        <View style={styles.zoneHeader}>
+          <Text style={styles.zoneTitle}>CHOOSE YOUR ZONE</Text>
+          <Text style={styles.zoneSubtitle}>Unlock new areas to boost your production.</Text>
+          <View style={styles.zoneProgressRow}>
+            <View style={styles.zoneProgressCard}>
+              <Text style={styles.zoneProgressLabel}>REBIRTHS</Text>
+              <Text style={styles.zoneProgressValue}>{rebirths}</Text>
+            </View>
+            <View style={styles.zoneProgressCard}>
+              <Text style={styles.zoneProgressLabel}>CURRENT ZONE</Text>
+              <Text style={styles.zoneProgressValue}>{selectedZone || 'Green Hill'}</Text>
+            </View>
           </View>
-        ))}
-      </View>
-      <Button wide onPress={() => navigate('home')}>Back</Button>
+        </View>
+
+        <Pressable
+          onPress={() => onSelectZone(null)}
+          style={({ pressed }) => [
+            styles.greenHillOption,
+            !selectedZone && styles.selectedZoneCard,
+            pressed && styles.buttonPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Select Green Hill"
+        >
+          <View>
+            <Text style={styles.zoneCardTitle}>Green Hill</Text>
+            <Text style={styles.zoneCardDescription}>Your starting zone</Text>
+          </View>
+          <Text style={styles.zoneStatus}>{!selectedZone ? 'ACTIVE' : 'SELECT'}</Text>
+        </Pressable>
+
+        <Text style={styles.zoneListTitle}>UNLOCKED ZONES</Text>
+        <View style={styles.levelGrid}>
+          {levels.map((level) => {
+            const locked = rebirths < level.requiredRebirths;
+            const selected = selectedZone === level.name;
+            return (
+              <View style={[styles.level, locked && styles.lockedLevel]} key={level.name}>
+                <Image source={level.image} style={styles.levelImage} />
+                <View style={styles.levelInfo}>
+                  <Text style={styles.levelName}>{level.name}</Text>
+                  <Text style={styles.levelBonus}>{level.bonus}</Text>
+                  <Text style={styles.levelRequirement}>
+                    {locked ? `${level.requiredRebirths} rebirths required` : 'Unlocked'}
+                  </Text>
+                  <Button
+                    disabled={locked}
+                    onPress={() => onSelectZone(level.name)}
+                  >
+                    {locked ? 'Locked' : selected ? 'Selected' : 'Select'}
+                  </Button>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+        <Button wide onPress={() => navigate('home')}>Back to Game</Button>
+      </ScrollView>
     </View>
   );
 }
@@ -470,7 +512,7 @@ function MarketScreen({
   const [redShopPage, setRedShopPage] = useState('items');
 
   const redShopItems = redShopPage === 'items' ? [
-     { key: 'speedShoes', name: 'Speed Shoes', detail: 'Red Rings x1.2' },
+     { key: 'speedShoes', name: 'Speed Shoes', detail: 'Red Rings x1.3' },
      { key: 'chaosEmerald', name: 'Chaos Emerald', detail: '+7x', stock: `${redUpgrades.chaosEmerald.stock}/7` },
      { key: 'starfall', name: 'Starfall', detail: '+1x' },
      { key: 'masterEmerald', name: 'Master Emerald', detail: '+50x', stock: `${redUpgrades.masterEmerald.stock}/1` },
@@ -813,8 +855,9 @@ export default function App() {
       setRedDrop(getRedDropForLevel(loadedRedUpgrades.speedShoes?.level || 0));
       setRngRed(20 + ((loadedRedUpgrades.robotTeleporter.level || 0) * 5));
       setClickRedRate(loadedRedUpgrades.warpTopaz.level || 0);
-      setTickSpeed(game.tickSpeed || 1000);
-      setTimeStones(roundedGame.timeStones || 0);
+      const loadedTimeStones = roundedGame.timeStones || 0;
+      setTickSpeed(getTickSpeedForTimeStones(loadedTimeStones));
+      setTimeStones(loadedTimeStones);
       setTimePrice(roundedGame.timePrice || 100);
       setSuperMult(allSuperEmeraldsOwned ? 3 : allChaosEmeraldsOwned ? 2 : 1);
       setRedUpgrades(loadedRedUpgrades);
@@ -853,8 +896,8 @@ export default function App() {
     const capsuleTick = setInterval(() => {
       if (rngRed >= Math.random() * 1000 && !capsuleVisibleRef.current) {
         setCapsulePosition({
-          left: `${4 + Math.floor(Math.random() * 45)}%`,
-          top: `${5 + Math.floor(Math.random() * 20)}%`,
+          left: `${4 + Math.floor(Math.random() * 80)}%`,
+          top: `${5 + Math.floor(Math.random() * 80)}%`,
         });
         setCapsuleVisible(true);
         capsuleVisibleRef.current = true;
@@ -878,9 +921,12 @@ export default function App() {
     if (!effectiveRingsPerSec) return undefined;
     const passiveTimer = setInterval(() => {
       setRings((value) => value + effectiveRingsPerSec);
+      if (clickRedRate * backgroundMultipliers.redRate >= Math.floor(Math.random() * 1000)) {
+        setRedRings((value) => roundedValue(value + effectiveRedRingDrop));
+      }
     }, tickSpeed);
     return () => clearInterval(passiveTimer);
-  }, [effectiveRingsPerSec, tickSpeed]);
+  }, [clickRedRate, effectiveRedRingDrop, effectiveRingsPerSec, backgroundMultipliers.redRate, tickSpeed]);
 
   const navigate = (next) => setScreen(next);
 
@@ -1021,8 +1067,9 @@ export default function App() {
     }
     if (rings < timePrice) return;
     setRings((value) => Math.round(value - timePrice));
-    setTickSpeed((value) => value - 100);
-    setTimeStones((value) => value + 1);
+    const nextTimeStones = timeStones + 1;
+    setTickSpeed(getTickSpeedForTimeStones(nextTimeStones));
+    setTimeStones(nextTimeStones);
     setTimePrice((value) => roundedValue(value * 35));
   };
   const purchaseRedUpgrade = (item) => {
@@ -1171,12 +1218,28 @@ const styles = StyleSheet.create({
   screen: { flex: 1, padding: 8, alignItems: 'center' },
   backgroundImage: { opacity: 0.88 },
   blueScreen: { backgroundColor: '#7fc5f5' },
+  zoneScreen: { backgroundColor: '#0d245f', alignItems: 'stretch' },
+  zoneScroll: { flex: 1, width: '100%' },
+  zoneContent: { alignItems: 'center', padding: 8, paddingBottom: 24 },
+  zoneHeader: { width: '100%', backgroundColor: 'rgba(20, 43, 104, .98)', borderWidth: 1, borderColor: '#7de2ff', borderRadius: 10, padding: 12, marginBottom: 10 },
+  zoneTitle: { color: '#ffe75c', fontSize: 22, fontWeight: '900', textAlign: 'center' },
+  zoneSubtitle: { color: '#d9e3ff', fontSize: 13, fontWeight: '700', textAlign: 'center', marginTop: 4 },
+  zoneProgressRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
+  zoneProgressCard: { width: '48.5%', backgroundColor: 'rgba(5, 28, 91, .8)', borderRadius: 7, padding: 8, alignItems: 'center' },
+  zoneProgressLabel: { color: '#9eb6e8', fontSize: 10, fontWeight: '900' },
+  zoneProgressValue: { color: '#fff', fontSize: 17, fontWeight: '900', marginTop: 3, textAlign: 'center' },
+  greenHillOption: { width: '100%', backgroundColor: 'rgba(37, 127, 91, .9)', borderWidth: 1, borderColor: '#79e0ad', borderRadius: 9, padding: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  selectedZoneCard: { borderWidth: 2, borderColor: '#ffe75c' },
+  zoneCardTitle: { color: '#fff', fontSize: 18, fontWeight: '900' },
+  zoneCardDescription: { color: '#d9ffe9', fontSize: 12, marginTop: 2 },
+  zoneStatus: { color: '#ffe75c', fontSize: 12, fontWeight: '900' },
+  zoneListTitle: { width: '100%', color: '#7de2ff', fontSize: 14, fontWeight: '900', letterSpacing: 1, marginBottom: 6 },
   topBar: { width: '100%', minHeight: 55, backgroundColor: 'rgba(5, 28, 91, .94)', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8 },
   topTitle: { color: '#fff', fontSize: 24, fontWeight: '900' },
   backArrow: { width: 38 },
   backArrowText: { color: '#fff', fontSize: 38, lineHeight: 38 },
   topBarSpacer: { width: 38 },
-  clickerContent: { width: '100%', flexGrow: 1, alignItems: 'center', paddingBottom: 15 },
+  clickerContent: { width: '100%', flex: 1, alignItems: 'center', paddingBottom: 15 },
   clickStats: { width: '100%', backgroundColor: 'rgba(13, 36, 116, .9)', borderRadius: 6, padding: 6, marginBottom: 3 },
   statsTitle: { color: '#ffe75c', fontSize: 12, fontWeight: '900', textAlign: 'center', marginBottom: 4 },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
@@ -1192,11 +1255,11 @@ const styles = StyleSheet.create({
   emeraldImage: { width: 30, height: 30, resizeMode: 'contain', marginHorizontal: 8 },
   superEmeraldBoosted: { transform: [{ scale: 1.5 }] },
   characterBadge: { position: 'absolute', width: 70, alignItems: 'center', zIndex: 2 },
-  characterTopLeft: { top: 0, left: '50%', transform: [{ translateX: -220 }, { translateY: 20 }] },
-  characterTopRight: { top: 0, left: '50%', transform: [{ translateX: -40 }, { translateY: 20 }] },
-  characterLeft: { top: 50, left: '50%', transform: [{ translateX: -290 }, { translateY: 30 }] },
-  characterRight: { top: 50, left: '50%', transform: [{ translateX: 25 }, { translateY: 30 }] },
-  characterTop: { top: -20, left: '50%', transform: [{ translateX: -130 }, { translateY: 20 }] },
+  characterTopLeft: { top: 0, left: '50%', transform: [{ translateX: -135 }, { translateY: 20 }] },
+  characterTopRight: { top: 0, left: '50%', transform: [{ translateX: 55 }, { translateY: 20 }] },
+  characterLeft: { top: 50, left: '50%', transform: [{ translateX: -195 }, { translateY: 30 }] },
+  characterRight: { top: 50, left: '50%', transform: [{ translateX: 120 }, { translateY: 30 }] },
+  characterTop: { top: -20, left: '50%', transform: [{ translateX: -35 }, { translateY: 20 }] },
   characterIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
   characterInitial: { color: '#fff', fontSize: 22, fontWeight: '900' },
   characterCount: { color: '#fff', backgroundColor: 'navy', borderRadius: 8, paddingHorizontal: 5, fontSize: 12, fontWeight: '900', marginTop: -7 },
@@ -1246,11 +1309,14 @@ const styles = StyleSheet.create({
   buttonPressed: { opacity: 0.82, transform: [{ translateY: 2 }], shadowOpacity: 0.12, elevation: 1 },
   pressed: { opacity: 0.65 },
   pageTitle: { color: '#4a5360', fontSize: 31, fontWeight: '900', textAlign: 'center', marginVertical: 8 },
-  levelGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', flex: 1 },
-  levelProgress: { color: '#4b5663', fontSize: 16, fontWeight: '900', textAlign: 'center', marginBottom: 3 },
-  level: { width: '46%', alignItems: 'center', marginVertical: 5 },
-  levelImage: { width: 86, height: 125, resizeMode: 'cover' },
-  levelRequirement: { color: '#4b5663', fontSize: 15, fontWeight: '900', textAlign: 'center', marginVertical: 3 },
+  levelGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  level: { width: '48.5%', backgroundColor: 'rgba(20, 43, 104, .96)', borderWidth: 1, borderColor: '#4d79bd', borderRadius: 9, padding: 7, marginBottom: 10 },
+  lockedLevel: { opacity: 0.62 },
+  levelImage: { width: '100%', height: 120, resizeMode: 'cover', borderRadius: 6 },
+  levelInfo: { alignItems: 'center', paddingTop: 6 },
+  levelName: { color: '#fff', fontSize: 16, fontWeight: '900', textAlign: 'center' },
+  levelBonus: { color: '#ffe75c', fontSize: 13, fontWeight: '900', textAlign: 'center', marginTop: 2 },
+  levelRequirement: { color: '#b9c9ed', fontSize: 11, fontWeight: '800', textAlign: 'center', marginVertical: 4 },
   marketScreen: { backgroundColor: '#241a36', alignItems: 'stretch' },
   ringShopScreen: { backgroundColor: '#7d2638', alignItems: 'stretch' },
   marketArtwork: { width: '100%', height: 245, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#d94b57' },
