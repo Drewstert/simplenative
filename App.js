@@ -15,7 +15,8 @@ import {
 import { supabase } from './lib/supabase';
 import { loadGame, loadLeaderboard, saveGame } from './lib/gameData';
 
-// Shared display and progression helpers.
+const orange = '#ffa500';
+const navy = '#071d5a';
 const roundedValue = (value) => Math.round(value);
 const getRedDropForLevel = (level) => roundedValue(2 * (1.3 ** level));
 const timeStoneTickBoost = 155;
@@ -28,8 +29,6 @@ const formatDisplayNumber = (value) => {
 };
 const roundIfNumber = (value) => (typeof value === 'number' ? roundedValue(value) : value);
 const formatTickSpeed = (milliseconds) => `${(milliseconds / 1000).toFixed(3)}s`;
-
-// Normalize saved values while preserving precise tick-speed milliseconds.
 const roundGameState = (game) => ({
   ...game,
   rings: roundedValue(game.rings),
@@ -77,8 +76,6 @@ const backgrounds = {
   stats: require('./assets/stats-bg.png'),
   market: require('./assets/black-market.png'),
 };
-
-// Static game content used by the home screen and shops.
 const chaosEmeraldImages = [
   require('./assets/Chaos_Emerald 1.png'),
   require('./assets/Chaos_Emerald 2.png'),
@@ -134,7 +131,6 @@ const redUpgradePriceMultipliers = {
   robotTeleporter: 1.8,
 };
 
-// Rebuild derived shop values from their persisted levels.
 const rebuildRedUpgrades = (savedUpgrades) => {
   const defaults = createRedUpgrades();
   return Object.fromEntries(Object.entries(defaults).map(([key, defaultUpgrade]) => {
@@ -181,6 +177,14 @@ const characterPositions = [
   styles => styles.characterTopRight,
   styles => styles.characterRight,
 ];
+
+function StatLine({ label, value, valueStyle = styles.statValue }) {
+  return (
+    <Text style={styles.statLine}>
+      {label}: <Text style={valueStyle}>{formatDisplayNumber(value)}</Text>
+    </Text>
+  );
+}
 
 function Button({ children, onPress, wide = false, disabled = false }) {
   return (
@@ -619,6 +623,7 @@ function StatsScreen({
   tickSpeed,
   timeStones,
   timePrice,
+  rebirths,
   selectedZone,
   chaosEmeraldsOwned,
   superEmeraldsOwned,
@@ -916,12 +921,9 @@ export default function App() {
     if (!effectiveRingsPerSec) return undefined;
     const passiveTimer = setInterval(() => {
       setRings((value) => value + effectiveRingsPerSec);
-      if (clickRedRate * backgroundMultipliers.redRate >= Math.floor(Math.random() * 1000)) {
-        setRedRings((value) => roundedValue(value + effectiveRedRingDrop));
-      }
     }, tickSpeed);
     return () => clearInterval(passiveTimer);
-  }, [clickRedRate, effectiveRedRingDrop, effectiveRingsPerSec, backgroundMultipliers.redRate, tickSpeed]);
+  }, [effectiveRingsPerSec, tickSpeed]);
 
   const navigate = (next) => setScreen(next);
 
@@ -1049,6 +1051,7 @@ export default function App() {
       setUpgradeMult(1);
       setRingsPerSec(0);
       setRngRed(20);
+      setRedDrop(2);
       setClickRedRate(0);
       setSuperMult(1);
       setTickSpeed(1000);
@@ -1212,6 +1215,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#18214a' },
   screen: { flex: 1, padding: 8, alignItems: 'center' },
   backgroundImage: { opacity: 0.88 },
+  blueScreen: { backgroundColor: '#7fc5f5' },
   zoneScreen: { backgroundColor: '#0d245f', alignItems: 'stretch' },
   zoneScroll: { flex: 1, width: '100%' },
   zoneContent: { alignItems: 'center', padding: 8, paddingBottom: 24 },
@@ -1256,7 +1260,7 @@ const styles = StyleSheet.create({
   characterTop: { top: -20, left: '50%', transform: [{ translateX: -35 }, { translateY: 20 }] },
   characterIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
   characterInitial: { color: '#fff', fontSize: 22, fontWeight: '900' },
-  characterCount: { color: '#fff', backgroundColor: '#071d5a', borderRadius: 8, paddingHorizontal: 5, fontSize: 12, fontWeight: '900', marginTop: -7 },
+  characterCount: { color: '#fff', backgroundColor: 'navy', borderRadius: 8, paddingHorizontal: 5, fontSize: 12, fontWeight: '900', marginTop: -7 },
   characterName: { color: '#000', fontSize: 10, fontWeight: '900', textAlign: 'center', marginTop: 2 },
   collectibleGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', backgroundColor: 'rgba(205, 215, 227, .68)' },
   collectible: { width: '50%', height: 110, borderWidth: 1, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },
