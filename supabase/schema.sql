@@ -97,9 +97,12 @@ create table if not exists public.leaderboard (
   user_id uuid primary key references auth.users(id) on delete cascade,
   username text not null default 'Anonymous',
   rings numeric not null default 0,
+  red_rings numeric not null default 0,
   rebirths integer not null default 0,
   updated_at timestamptz not null default now()
 );
+
+alter table public.leaderboard add column if not exists red_rings numeric not null default 0;
 
 alter table public.leaderboard enable row level security;
 

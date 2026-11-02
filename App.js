@@ -729,20 +729,46 @@ function StatsScreen({
   );
 }
 
-function Leaderboard({ rows, loading, error, navigate }) {
+function Leaderboard({ rows, loading, error, category, onCategoryChange, navigate }) {
+  const categoryConfig = {
+    rings: { label: 'Most Rings', valueLabel: 'Rings', value: (row) => row.rings },
+    rebirths: { label: 'Most Rebirths', valueLabel: 'Rebirths', value: (row) => row.rebirths },
+    redRings: { label: 'Most Red Rings', valueLabel: 'Red Rings', value: (row) => row.red_rings },
+  };
+  const selectedCategory = categoryConfig[category];
+
   return (
-    <ImageBackground source={require('./assets/leaderboard-bg.png')} style={styles.screen}>
-      <Text style={styles.pageTitle}>LEADERBOARD</Text>
+    <ImageBackground source={require('./assets/leaderboard-bg.png')} style={[styles.screen, styles.leaderboardScreen]}>
+      <TopBar title="Leaderboard" onBack={() => navigate('home')} />
+      <Text style={styles.leaderboardSubtitle}>Compete across every major milestone.</Text>
+      <View style={styles.leaderboardTabs}>
+        {Object.entries(categoryConfig).map(([key, config]) => (
+          <Pressable
+            key={key}
+            onPress={() => onCategoryChange(key)}
+            style={[styles.leaderboardTab, category === key && styles.leaderboardTabSelected]}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.leaderboardTabText, category === key && styles.leaderboardTabTextSelected]}>
+              {config.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
       <View style={styles.table}>
-        <Text style={styles.tableHeader}>Username                 Rebirths        Rings</Text>
+        <View style={styles.leaderboardHeaderRow}>
+          <Text style={styles.tableHeader}>RANK</Text>
+          <Text style={[styles.tableHeader, styles.leaderboardNameHeader]}>PLAYER</Text>
+          <Text style={styles.tableHeader}>{selectedCategory.valueLabel.toUpperCase()}</Text>
+        </View>
         {loading ? <ActivityIndicator size="large" color="#071d5a" /> : null}
         {error ? <Text style={styles.saveStatus}>{error}</Text> : null}
         {!loading && !error && rows.length === 0 ? <Placeholder label="No scores yet" /> : null}
         {rows.map((row, index) => (
           <View style={styles.leaderboardRow} key={`${row.username}-${index}`}>
-            <Text style={styles.leaderboardCell}>{row.username}</Text>
-            <Text style={styles.leaderboardCell}>{row.rebirths}</Text>
-            <Text style={styles.leaderboardCell}>{formatDisplayNumber(row.rings)}</Text>
+            <Text style={styles.leaderboardRank}>{index + 1}</Text>
+            <Text style={[styles.leaderboardCell, styles.leaderboardName]} numberOfLines={1}>{row.username}</Text>
+            <Text style={styles.leaderboardCell}>{formatDisplayNumber(selectedCategory.value(row))}</Text>
           </View>
         ))}
       </View>
@@ -757,6 +783,7 @@ export default function App() {
   const [username, setUsername] = useState('Anonymous');
   const [saveStatus, setSaveStatus] = useState('');
   const [leaderboardRows, setLeaderboardRows] = useState([]);
+  const [leaderboardCategory, setLeaderboardCategory] = useState('rings');
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState('');
   const userRef = useRef(null);
@@ -921,9 +948,12 @@ export default function App() {
     if (!effectiveRingsPerSec) return undefined;
     const passiveTimer = setInterval(() => {
       setRings((value) => value + effectiveRingsPerSec);
+      if (clickRedRate * backgroundMultipliers.redRate >= Math.floor(Math.random() * 1000)) {
+        setRedRings((value) => roundedValue(value + effectiveRedRingDrop));
+      }
     }, tickSpeed);
     return () => clearInterval(passiveTimer);
-  }, [effectiveRingsPerSec, tickSpeed]);
+  }, [clickRedRate, effectiveRedRingDrop, effectiveRingsPerSec, backgroundMultipliers.redRate, tickSpeed]);
 
   const navigate = (next) => setScreen(next);
 
@@ -988,10 +1018,15 @@ export default function App() {
 
   const showLeaderboard = async () => {
     setScreen('leaderboard');
+    await loadLeaderboardCategory(leaderboardCategory);
+  };
+
+  const loadLeaderboardCategory = async (category) => {
+    setLeaderboardCategory(category);
     setLeaderboardLoading(true);
     setLeaderboardError('');
     try {
-      setLeaderboardRows(await loadLeaderboard());
+      setLeaderboardRows(await loadLeaderboard(category));
     } catch (error) {
       setLeaderboardError(error.message);
     } finally {
@@ -1184,6 +1219,8 @@ export default function App() {
           rows={leaderboardRows}
           loading={leaderboardLoading}
           error={leaderboardError}
+          category={leaderboardCategory}
+          onCategoryChange={loadLeaderboardCategory}
           navigate={navigate}
         />
       );
@@ -1260,7 +1297,7 @@ const styles = StyleSheet.create({
   characterTop: { top: -20, left: '50%', transform: [{ translateX: -35 }, { translateY: 20 }] },
   characterIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
   characterInitial: { color: '#fff', fontSize: 22, fontWeight: '900' },
-  characterCount: { color: '#fff', backgroundColor: 'navy', borderRadius: 8, paddingHorizontal: 5, fontSize: 12, fontWeight: '900', marginTop: -7 },
+  characterCount: { color: '#fff', backgroundColor: '#071d5a', borderRadius: 8, paddingHorizontal: 5, fontSize: 12, fontWeight: '900', marginTop: -7 },
   characterName: { color: '#000', fontSize: 10, fontWeight: '900', textAlign: 'center', marginTop: 2 },
   collectibleGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', backgroundColor: 'rgba(205, 215, 227, .68)' },
   collectible: { width: '50%', height: 110, borderWidth: 1, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },
@@ -1363,7 +1400,18 @@ const styles = StyleSheet.create({
   saveStatus: { color: '#d9e3ff', fontSize: 13, fontWeight: '900', textAlign: 'center', marginTop: 4 },
   statsActions: { width: '100%', flexDirection: 'row', justifyContent: 'space-around', marginTop: 6 },
   table: { flex: 1, width: '100%', borderWidth: 1, borderColor: '#fff', backgroundColor: 'rgba(210, 221, 235, .62)' },
-  tableHeader: { color: '#4a5360', fontSize: 16, fontWeight: '900', padding: 8, textAlign: 'center' },
+  leaderboardScreen: { backgroundColor: '#17244f', alignItems: 'stretch' },
+  leaderboardSubtitle: { color: '#d9e3ff', fontSize: 14, fontWeight: '700', textAlign: 'center', marginVertical: 8 },
+  leaderboardTabs: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  leaderboardTab: { width: '32%', backgroundColor: 'rgba(20, 43, 104, .96)', borderWidth: 1, borderColor: '#4d79bd', borderRadius: 8, padding: 8, alignItems: 'center' },
+  leaderboardTabSelected: { backgroundColor: '#ffb703', borderColor: '#ffe75c' },
+  leaderboardTabText: { color: '#d9e3ff', fontSize: 11, fontWeight: '900', textAlign: 'center' },
+  leaderboardTabTextSelected: { color: '#071d5a' },
+  leaderboardHeaderRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(5, 28, 91, .9)' },
+  tableHeader: { color: '#ffe75c', flex: 0.25, fontSize: 12, fontWeight: '900', padding: 8, textAlign: 'center' },
+  leaderboardNameHeader: { flex: 0.6 },
   leaderboardRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderColor: '#fff', padding: 8 },
-  leaderboardCell: { color: '#33445b', flex: 1, fontSize: 15, fontWeight: '900', textAlign: 'center' },
+  leaderboardRank: { color: '#4a5360', flex: 0.25, fontSize: 15, fontWeight: '900', textAlign: 'center' },
+  leaderboardCell: { color: '#33445b', flex: 0.75, fontSize: 15, fontWeight: '900', textAlign: 'center' },
+  leaderboardName: { flex: 1 },
 });
