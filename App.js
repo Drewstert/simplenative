@@ -4,12 +4,14 @@ import {
   ActivityIndicator,
   Image,
   ImageBackground,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { supabase } from './lib/supabase';
@@ -778,6 +780,7 @@ function Leaderboard({ rows, loading, error, category, onCategoryChange, navigat
 }
 
 export default function App() {
+  const { width, height } = useWindowDimensions();
   const [screen, setScreen] = useState('home');
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState('Anonymous');
@@ -1244,12 +1247,33 @@ export default function App() {
   };
 
   const content = renderScreen();
+  const scale = Platform.OS === 'web'
+    ? Math.min(width / 420, height / 900)
+    : 1;
 
-  return <SafeAreaView style={styles.safeArea}><StatusBar style="light" />{content}</SafeAreaView>;
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="light" />
+      <View style={styles.responsiveViewport}>
+        <View
+          style={[
+            styles.scaledApp,
+            {
+              transform: [{ scale: Math.max(scale, 0.55) }],
+            },
+          ]}
+        >
+          {content}
+        </View>
+      </View>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#18214a' },
+  responsiveViewport: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  scaledApp: { width: 420, height: 900, flexShrink: 0 },
   screen: { flex: 1, padding: 8, alignItems: 'center' },
   backgroundImage: { opacity: 0.88 },
   blueScreen: { backgroundColor: '#7fc5f5' },
