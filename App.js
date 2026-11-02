@@ -18,6 +18,7 @@ import { loadGame, loadLeaderboard, saveGame } from './lib/gameData';
 const orange = '#ffa500';
 const navy = '#071d5a';
 const roundedValue = (value) => Math.round(value);
+const getRedDropForLevel = (level) => roundedValue(2 * (1.2 ** level));
 const formatDisplayNumber = (value) => {
   const rounded = roundedValue(value);
   return Math.abs(rounded) >= 1000000000
@@ -114,6 +115,56 @@ const createRedUpgrades = () => ({
   superEmerald: { price: 1000, stock: 7 },
   warpTopaz: { price: 8, level: 0 },
   robotTeleporter: { price: 8, level: 0 },
+});
+
+const redUpgradePriceMultipliers = {
+  speedShoes: 1.5,
+  starfall: 1.5,
+  chipBracelet: 1.5,
+  chaosEmerald: 1.5,
+  masterEmerald: 1.5,
+  superEmerald: 1.5,
+  warpTopaz: 1.8,
+  robotTeleporter: 1.8,
+};
+
+const rebuildRedUpgrades = (savedUpgrades) => {
+  const defaults = createRedUpgrades();
+  return Object.fromEntries(Object.entries(defaults).map(([key, defaultUpgrade]) => {
+    const savedUpgrade = savedUpgrades?.[key] || defaultUpgrade;
+    const level = savedUpgrade.level || 0;
+    return [key, {
+      ...defaultUpgrade,
+      ...savedUpgrade,
+      price: roundedValue(
+        defaultUpgrade.price * (redUpgradePriceMultipliers[key] ** level),
+      ),
+      level,
+    }];
+  }));
+};
+
+const rebuildActiveUpgradeState = (levels) => ({
+  upgrade: activeUpgrades.reduce(
+    (total, upgrade) => total + upgrade.gain * (levels[upgrade.name] || 0),
+    0,
+  ),
+  costs: Object.fromEntries(
+    activeUpgrades.map((upgrade) => [
+      upgrade.name,
+      roundedValue(upgrade.cost * (1.2 ** (levels[upgrade.name] || 0))),
+    ]),
+  ),
+});
+
+const rebuildPassiveCharacters = (savedCharacters) => passiveCharacters.map((character) => {
+  const savedCharacter = savedCharacters?.find((saved) => saved.name === character.name);
+  const count = savedCharacter?.count || 0;
+  return {
+    ...character,
+    count,
+    cost: roundedValue(character.cost * (1.2 ** count)),
+  };
 });
 
 const characterPositions = [
@@ -708,6 +759,7 @@ export default function App() {
   const backgroundSource = activeLevel?.image || backgrounds.clicker;
   const ringsPerClick = roundedValue((1 + upgrade) * upgradeMult * baseMult * backgroundMultipliers.active * superMult);
   const effectiveRingsPerSec = roundedValue(ringsPerSec * upgradeMult * baseMult * backgroundMultipliers.passive * superMult);
+  const effectiveRedRingDrop = roundedValue(redDrop * baseMult * backgroundMultipliers.red);
 
   useEffect(() => {
     let active = true;
@@ -733,27 +785,44 @@ export default function App() {
       const game = savedGame.game_state;
       setUsername(game.username || savedGame.username || 'Anonymous');
       const roundedGame = roundGameState(game);
+      const loadedRedUpgrades = rebuildRedUpgrades(roundedGame.redUpgrades);
+      const loadedActiveUpgradeLevels = roundedGame.activeUpgradeLevels || {};
+      const rebuiltActiveState = rebuildActiveUpgradeState(loadedActiveUpgradeLevels);
+      const rebuiltCharacters = rebuildPassiveCharacters(roundedGame.ownedCharacters);
+      const rebuiltRingsPerSec = rebuiltCharacters.reduce(
+        (total, character) => total + character.gain * character.count,
+        0,
+      );
+      const allChaosEmeraldsOwned = loadedRedUpgrades.chaosEmerald.stock === 0;
+      const allSuperEmeraldsOwned = loadedRedUpgrades.superEmerald.stock === 0;
       setRings(roundedGame.rings || 0);
       setRedRings(roundedGame.redRings || 0);
-      setUpgrade(roundedGame.upgrade || 0);
-      setUpgradeMult(roundedGame.upgradeMult || 1);
+      setUpgrade(roundedValue(rebuiltActiveState.upgrade));
+      setUpgradeMult(roundedValue(
+        1
+        + (loadedRedUpgrades.starfall.level || 0)
+        + ((loadedRedUpgrades.chipBracelet.level || 0) * 5)
+        + ((7 - loadedRedUpgrades.chaosEmerald.stock) * 7)
+        + ((loadedRedUpgrades.masterEmerald.stock === 0) ? 50 : 0)
+        + ((7 - loadedRedUpgrades.superEmerald.stock) * 25),
+      ));
       setBaseMult(roundedGame.baseMult || 1);
       setRebirths(Math.max(0, Math.round(Math.log2(roundedGame.baseMult || 1))));
       setSelectedZone(game.selectedZone || null);
-      setRingsPerSec(roundedGame.ringsPerSec || 0);
-      setRedDrop(roundedGame.redDrop || 2);
-      setRngRed(roundedGame.rngRed || 20);
-      setClickRedRate(roundedGame.clickRedRate || 0);
+      setRingsPerSec(roundedValue(rebuiltRingsPerSec));
+      setRedDrop(getRedDropForLevel(loadedRedUpgrades.speedShoes?.level || 0));
+      setRngRed(20 + ((loadedRedUpgrades.robotTeleporter.level || 0) * 5));
+      setClickRedRate(loadedRedUpgrades.warpTopaz.level || 0);
       setTickSpeed(game.tickSpeed || 1000);
       setTimeStones(roundedGame.timeStones || 0);
       setTimePrice(roundedGame.timePrice || 100);
-      setSuperMult(roundedGame.superMult || 1);
-      setRedUpgrades(roundedGame.redUpgrades || createRedUpgrades());
-      setOwnedCharacters(roundedGame.ownedCharacters || ownedCharacters);
-      setActiveUpgradeCosts(roundedGame.activeUpgradeCosts || activeUpgradeCosts);
+      setSuperMult(allSuperEmeraldsOwned ? 3 : allChaosEmeraldsOwned ? 2 : 1);
+      setRedUpgrades(loadedRedUpgrades);
+      setOwnedCharacters(rebuiltCharacters);
+      setActiveUpgradeCosts(rebuiltActiveState.costs);
       setActiveUpgradeLevels(
-        Object.keys(roundedGame.activeUpgradeLevels || {}).length
-          ? roundedGame.activeUpgradeLevels
+        Object.keys(loadedActiveUpgradeLevels).length
+          ? loadedActiveUpgradeLevels
           : activeUpgradeLevels,
       );
     }
@@ -889,7 +958,7 @@ export default function App() {
 
   const collectRedRings = () => {
     if (clickRedRate * backgroundMultipliers.redRate < Math.floor(Math.random() * 1000)) return;
-    setRedRings((value) => roundedValue(value + (redDrop + baseMult / 2) * backgroundMultipliers.red));
+    setRedRings((value) => roundedValue(value + effectiveRedRingDrop));
   };
 
   const collectRings = () => {
@@ -898,7 +967,7 @@ export default function App() {
   };
 
   const collectCapsule = () => {
-    setRedRings((value) => roundedValue(value + (redDrop + baseMult / 2) * backgroundMultipliers.red));
+    setRedRings((value) => roundedValue(value + effectiveRedRingDrop));
     setCapsuleVisible(false);
     capsuleVisibleRef.current = false;
     if (capsuleTimeoutRef.current) {
@@ -973,7 +1042,9 @@ export default function App() {
       },
     }));
     setRedRings((value) => roundedValue(value - upgrade.price));
-    if (item.key === 'speedShoes') setRedDrop((value) => roundedValue(value * 1.2));
+    if (item.key === 'speedShoes') {
+      setRedDrop(getRedDropForLevel((upgrade.level || 0) + 1));
+    }
     if (item.key === 'warpTopaz') setClickRedRate((value) => value + 1);
     if (item.key === 'robotTeleporter') setRngRed((value) => value + 5);
     if (item.key === 'starfall') setUpgradeMult((value) => value + 1);
@@ -991,7 +1062,7 @@ export default function App() {
         <ClickerScreen
           rings={rings}
           redRings={redRings}
-          redRingDrop={(redDrop + baseMult / 2) * backgroundMultipliers.red}
+          redRingDrop={effectiveRedRingDrop}
           redRingClickRate={clickRedRate * backgroundMultipliers.redRate}
           capsuleSpawnRate={rngRed}
           rebirths={rebirths}
@@ -1038,7 +1109,7 @@ export default function App() {
           upgrade={upgrade}
           ringsPerClick={ringsPerClick}
           ringsPerSec={effectiveRingsPerSec}
-          redPerEvent={(redDrop + baseMult / 2) * backgroundMultipliers.red}
+          redPerEvent={effectiveRedRingDrop}
           redDrop={redDrop}
           redChance={clickRedRate * backgroundMultipliers.redRate}
           capsuleChance={rngRed}
