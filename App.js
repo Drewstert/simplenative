@@ -981,7 +981,6 @@ export default function App() {
     ownedCharacters,
     activeUpgradeCosts,
     activeUpgradeLevels,
-    rebirths: baseMult - 1,
   });
   gameSnapshotRef.current = gameSnapshot;
 
